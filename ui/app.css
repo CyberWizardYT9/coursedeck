@@ -1,0 +1,252 @@
+:root{
+  color-scheme: light dark;
+  --bg:#f5f5f3; --card:#fff; --ink:#16161a; --mute:#6f6f6c; --line:#e5e5df; --soft:#efefea;
+  --red:#c0362c; --amber:#a8660f; --green:#2f7a4f; --blue:#2c5aa0; --violet:#6a4a9c;
+  --r:12px; --shadow:0 1px 2px rgba(20,20,20,.06), 0 1px 1px rgba(20,20,20,.04);
+  --shadow-lg:0 10px 34px rgba(20,20,20,.16);
+  --gap:10px;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#131316; --card:#1c1c20; --ink:#ececeb; --mute:#9b9b96; --line:#2d2d35; --soft:#222228;
+         --red:#ef8378; --amber:#e0a355; --green:#6cc08d; --blue:#82abe6; --violet:#b199dd;
+         --shadow:0 1px 2px rgba(0,0,0,.4); --shadow-lg:0 10px 34px rgba(0,0,0,.5); }
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:14.5px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+a{color:var(--blue);text-underline-offset:2px}
+h1{font-size:19px;margin:0;letter-spacing:-.021em;font-weight:700}
+h3{font-size:15px;margin:0 0 3px;letter-spacing:-.011em}
+.mute{color:var(--mute)}
+.sub{color:var(--mute);font-size:13px;margin:2px 0 0}
+.spread{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap}
+.row{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+.tnum{font-variant-numeric:tabular-nums}
+
+/* ---------------------------------------------------------------- buttons */
+.btn{background:var(--ink);color:var(--bg);border:0;border-radius:9px;padding:8px 14px;
+  font:inherit;font-weight:600;font-size:13.5px;cursor:pointer;white-space:nowrap;
+  display:inline-flex;align-items:center;gap:6px;line-height:1.2;transition:opacity .12s,transform .06s}
+.btn:hover{opacity:.87}
+.btn:active{transform:translateY(.5px)}
+.btn:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.btn.alt{background:var(--card);color:var(--ink);border:1px solid var(--line);box-shadow:var(--shadow)}
+.btn.ghost{background:transparent;color:var(--mute);border:0;padding:6px 9px;box-shadow:none}
+.btn.ghost:hover{color:var(--ink);background:var(--soft)}
+.btn.sm{padding:6px 11px;font-size:12.5px}
+.btn.big{padding:11px 18px;font-size:15px;border-radius:10px}
+.btn:disabled{opacity:.42;cursor:default}
+
+/* ----------------------------------------------------------------- inputs */
+input,select,textarea{font:inherit;font-size:14.5px;background:var(--card);color:var(--ink);
+  border:1px solid var(--line);border-radius:9px;padding:9px 11px;width:100%}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--blue);outline-offset:-1px;border-color:transparent}
+textarea{min-height:64px;resize:vertical}
+label.f{display:block;margin-bottom:12px}
+label.f>span{display:block;font-size:13px;color:var(--ink);font-weight:650;margin-bottom:5px}
+label.f>em{display:block;font-size:12.5px;color:var(--mute);font-style:normal;margin-bottom:5px}
+label.inline{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--mute);cursor:pointer}
+label.inline input{width:auto;padding:0}
+
+/* ------------------------------------------------------------------ cards */
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+  padding:15px 17px;margin-bottom:var(--gap);box-shadow:var(--shadow)}
+.pill{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;
+  padding:2.5px 7px;border-radius:20px;color:#fff;white-space:nowrap;max-width:132px;overflow:hidden;
+  text-overflow:ellipsis;vertical-align:1px}
+.badge{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;
+  color:var(--green);background:color-mix(in srgb,var(--green) 16%,transparent);padding:1.5px 6px;border-radius:5px}
+.badge.warn{color:var(--red);background:color-mix(in srgb,var(--red) 16%,transparent)}
+.badge.info{color:var(--blue);background:color-mix(in srgb,var(--blue) 16%,transparent)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:6px 13px;
+  font-size:13px;font-weight:600;color:var(--mute);cursor:pointer;white-space:nowrap;box-shadow:var(--shadow)}
+.chip:hover{color:var(--ink)}
+.chip.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+
+/* ------------------------------------------------- compact to-do list rows */
+.group{margin-bottom:17px}
+.ghead{display:flex;align-items:center;gap:9px;padding:8px 2px;cursor:pointer;user-select:none;
+  position:sticky;top:0;background:var(--bg);z-index:5;border-bottom:1px solid var(--line)}
+.ghead .caret{font-size:11px;color:var(--mute);width:11px;transition:transform .15s}
+.group.closed .caret{transform:rotate(-90deg)}
+.ghead h2{font-size:13.5px;margin:0;font-weight:700;letter-spacing:-.005em;color:var(--ink)}
+.ghead .n{font-size:12.5px;color:var(--mute);font-weight:600}
+.ghead .accent{width:7px;height:7px;border-radius:50%;flex:none}
+.glist{margin-top:6px}
+.group.closed .glist{display:none}
+
+.item{background:var(--card);border:1px solid var(--line);border-left-width:3px;border-left-color:var(--line);
+  border-radius:9px;margin-bottom:5px;overflow:hidden;box-shadow:var(--shadow)}
+.item.b-overdue,.item.b-today{border-left-color:var(--red)}
+.item.b-tomorrow{border-left-color:var(--amber)}
+.item.b-week{border-left-color:var(--green)}
+.item.done{opacity:.48}
+.item.stale{opacity:.7}
+.ih{display:flex;gap:10px;align-items:center;padding:9px 13px;cursor:pointer}
+.ih:hover{background:var(--soft)}
+.ih input[type=checkbox]{width:19px;height:19px;flex:none;accent-color:#2f7a4f;cursor:pointer;margin:0}
+.imain{flex:1;min-width:0;display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}
+.it{font-weight:600;font-size:14px;line-height:1.4;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;max-width:100%}
+.item.done .it{text-decoration:line-through}
+.iside{display:flex;align-items:center;gap:10px;flex:none;font-size:12.5px;color:var(--mute)}
+.when{font-weight:700;font-size:12.5px;white-space:nowrap}
+.w-red{color:var(--red)}.w-amber{color:var(--amber)}.w-green{color:var(--green)}.w-mute{color:var(--mute)}
+.caretx{color:var(--mute);font-size:11px;transition:transform .15s}
+.item.open .caretx{transform:rotate(90deg)}
+.detail{border-top:1px solid var(--line);padding:12px 14px 13px 42px;display:none;background:var(--soft)}
+.item.open .detail{display:block}
+.detail p{margin:0 0 9px;font-size:13.5px;white-space:pre-wrap;line-height:1.55}
+.why{font-size:12.5px;color:var(--mute);margin-bottom:9px}
+.acts{display:flex;gap:6px;flex-wrap:wrap}
+
+/* ----------------------------------------------------------------- grades */
+.gcard{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+  padding:14px 16px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:2px}
+.gtop{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.gpct{font-size:27px;font-weight:700;letter-spacing:-.035em;line-height:1}
+.gletter{font-size:13px;font-weight:700;opacity:.75;margin-left:3px}
+.gmeter{height:6px;background:var(--soft);border-radius:6px;overflow:hidden;margin:9px 0 3px}
+.gmeter i{display:block;height:100%;border-radius:6px}
+.g-green{color:var(--green)} .g-blue{color:var(--blue)} .g-amber{color:var(--amber)}
+.g-red{color:var(--red)} .g-mute{color:var(--mute)}
+.bg-green{background:var(--green)} .bg-blue{background:var(--blue)} .bg-amber{background:var(--amber)}
+.bg-red{background:var(--red)} .bg-mute{background:var(--mute)}
+.grow{display:flex;align-items:center;gap:11px;padding:10px 13px;border:1px solid var(--line);
+  border-radius:9px;margin-bottom:5px;background:var(--card);box-shadow:var(--shadow)}
+.grow .gscore{font-weight:700;font-size:15px;white-space:nowrap;flex:none;font-variant-numeric:tabular-nums}
+.grow .gmain{flex:1;min-width:0}
+.grow .gname{font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gcomment{background:var(--soft);border-radius:8px;padding:9px 11px;margin-top:8px;font-size:13px}
+.gcomment b{font-size:12px;color:var(--mute)}
+
+/* ------------------------------------------------------------- week plans */
+.day-card{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:7px;
+  background:var(--card);box-shadow:var(--shadow)}
+.day-card.today{border-color:var(--red);border-width:2px;padding:11px 13px}
+.day-card.blank{opacity:.5}
+.day-card .dh{display:flex;gap:9px;align-items:baseline;margin-bottom:5px;flex-wrap:wrap}
+.day-card .dd{font-weight:700;font-size:14px}
+.day-card .dn{font-size:12.5px;color:var(--mute)}
+.day-card .tp{font-size:13.5px;font-weight:600;margin-bottom:4px;line-height:1.45}
+.day-card .wk{font-size:13px;color:var(--mute);white-space:pre-wrap;line-height:1.5}
+.wkblock{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:7px;background:var(--card)}
+.wkblock h4{margin:0 0 7px;font-size:13.5px}
+.wkblock ul{margin:0;padding-left:18px;font-size:13.5px}
+.wkblock li{margin:3px 0;line-height:1.45}
+.rawtext{font-size:13px;white-space:pre-wrap;background:var(--soft);border-radius:9px;padding:12px 14px;
+  max-height:360px;overflow:auto;line-height:1.55}
+.noteslist{background:color-mix(in srgb,var(--amber) 10%,var(--card));border:1px solid var(--amber);
+  border-radius:10px;padding:11px 14px;margin-bottom:9px}
+.noteslist ul{margin:5px 0 0;padding-left:18px;font-size:13.5px}
+.noteslist li{margin:3px 0}
+
+/* ------------------------------------------------------------------ misc */
+.empty{color:var(--mute);font-size:14.5px;padding:46px 18px;text-align:center;line-height:1.7}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(300px,100%),1fr));gap:var(--gap)}
+.grid.wide{grid-template-columns:repeat(auto-fill,minmax(min(340px,100%),1fr))}
+.bar{height:5px;background:var(--soft);border-radius:5px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--green);transition:width .35s}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--mute);flex:none;display:inline-block}
+.dot.ok{background:var(--green)}.dot.busy{background:var(--amber)}.dot.err{background:var(--red)}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid var(--line);
+  border-top-color:var(--amber);border-radius:50%;animation:sp .8s linear infinite;vertical-align:-2px}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;
+  justify-content:center;padding:16px;z-index:60}
+.modal.on{display:flex}
+.modal .box{background:var(--card);border-radius:15px;padding:22px;max-width:470px;width:100%;
+  max-height:88vh;overflow:auto;border:1px solid var(--line);box-shadow:var(--shadow-lg)}
+.modal h3{font-size:18px;margin-bottom:6px}
+.steps{counter-reset:s;margin:0 0 14px;padding:0;list-style:none}
+.steps li{counter-increment:s;position:relative;padding-left:31px;margin-bottom:10px;font-size:14px;line-height:1.5}
+.steps li::before{content:counter(s);position:absolute;left:0;top:0;width:22px;height:22px;border-radius:50%;
+  background:var(--ink);color:var(--bg);display:flex;align-items:center;justify-content:center;
+  font-size:12px;font-weight:700}
+
+/* ============================ NARROW SCREENS ============================ */
+@media (max-width:760px){
+  :root{ --gap:8px }
+  body{font-size:15px}
+  .it{white-space:normal}
+  .imain{flex-direction:column;gap:3px;align-items:flex-start}
+  .ih{align-items:flex-start;padding:11px 12px}
+  .ih input[type=checkbox]{margin-top:1px}
+  .iside{flex-direction:column;align-items:flex-end;gap:3px}
+  .detail{padding:12px 14px}
+  .card,.gcard{padding:13px 14px}
+  .modal{padding:0;align-items:flex-end}
+  .modal .box{border-radius:16px 16px 0 0;max-height:92vh;padding:20px 18px 26px}
+  .btn{padding:9px 14px}
+  .grow{flex-wrap:wrap}
+  .grow .gmain{flex-basis:100%;order:2}
+}
+@media (max-width:430px){
+  .chip{padding:6px 11px;font-size:12.5px}
+  .empty{padding:34px 12px;font-size:14px}
+}
+/* people who prefer less motion */
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.001ms !important;transition-duration:.001ms !important}
+  html{scroll-behavior:auto}
+}
+
+/* ------------------------------------------------- pending + toasts
+   Saving a reminder round-trips to Canvas and can take a few seconds. The
+   dialog closes immediately and the row appears straight away in a pending
+   state, so nothing looks frozen and the app stays usable meanwhile. */
+/* A saving row has to be unmissable — the previous version was so subtle that
+   people assumed nothing had happened and clicked away. */
+.item.pending{border-left-color:var(--blue) !important;border-color:var(--blue);
+  background:linear-gradient(90deg,
+    color-mix(in srgb,var(--blue) 16%,var(--card)) 0%,
+    color-mix(in srgb,var(--blue) 7%,var(--card)) 40%,
+    color-mix(in srgb,var(--blue) 16%,var(--card)) 80%);
+  background-size:220% 100%;animation:shimmer 1.5s ease-in-out infinite}
+@keyframes shimmer{0%{background-position:120% 0}100%{background-position:-120% 0}}
+.item.pending .ih{cursor:default}
+.item.pending .it{color:var(--blue)}
+.savingdot{display:inline-block;width:17px;height:17px;border:2.5px solid color-mix(in srgb,var(--blue) 30%,transparent);
+  border-top-color:var(--blue);border-radius:50%;animation:sp .7s linear infinite;flex:none}
+.badge.saving{background:var(--blue);color:#fff;font-size:10.5px;letter-spacing:.05em;
+  padding:3px 8px;animation:pulsebadge 1.4s ease-in-out infinite}
+@keyframes pulsebadge{50%{opacity:.6}}
+.item.failed{border-left-color:var(--amber) !important;border-color:var(--amber);
+  background:color-mix(in srgb,var(--amber) 9%,var(--card));animation:none}
+.item.failed .it{color:var(--amber)}
+
+#toasts{position:fixed;left:50%;transform:translateX(-50%);bottom:22px;z-index:80;
+  display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none;width:min(440px,calc(100% - 24px))}
+.toast{background:var(--ink);color:var(--bg);border-radius:11px;padding:13px 17px;font-size:14px;
+  font-weight:600;box-shadow:var(--shadow-lg);display:flex;align-items:center;gap:10px;
+  pointer-events:auto;animation:tin .18s ease-out;max-width:100%}
+.toast.err{background:var(--red);color:#fff}
+.toast.busy{background:var(--blue);color:#fff}
+.toast .tspin{display:inline-block;width:15px;height:15px;border:2.5px solid rgba(255,255,255,.35);
+  border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite;flex:none}
+.toast.warn{background:var(--amber);color:#fff}
+.toast .tmsg{flex:1;min-width:0}
+.toast button{background:rgba(255,255,255,.2);color:inherit;border:0;border-radius:7px;
+  padding:5px 10px;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;flex:none}
+.toast button:hover{background:rgba(255,255,255,.32)}
+@keyframes tin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@media (max-width:760px){ #toasts{bottom:14px} }
+
+/* -------------------------------------------------- first-sync progress
+   A first sync reads every course, its assignments, its weekly pages, the
+   calendar and the grades. On a full timetable that is ~40 seconds, which is
+   far too long to show an unlabelled spinner. */
+.syncbar{margin-top:10px}
+.syncbar .track{height:8px;background:color-mix(in srgb,var(--amber) 22%,transparent);
+  border-radius:8px;overflow:hidden}
+.syncbar .track i{display:block;height:100%;background:var(--amber);border-radius:8px;
+  transition:width .45s ease;width:0}
+.syncbar .track.indet i{width:35% !important;animation:slide 1.4s ease-in-out infinite}
+@keyframes slide{0%{margin-left:-35%}100%{margin-left:100%}}
+.syncbar .meta{display:flex;justify-content:space-between;gap:10px;margin-top:7px;
+  font-size:12.5px;color:var(--mute);font-variant-numeric:tabular-nums}
+.syncbar .meta b{color:var(--ink);font-weight:650}

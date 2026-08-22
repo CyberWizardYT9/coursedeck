@@ -1,0 +1,50 @@
+{
+  "manifest_version": 3,
+  "name": "Coursedeck",
+  "version": "2.4.0",
+  "description": "One clean dashboard for everything in your Canvas courses - assignments, events, clubs, grades and your own to-dos.",
+  "minimum_chrome_version": "116",
+  "permissions": [
+    "storage",
+    "alarms",
+    "scripting",
+    "tabs",
+    "notifications"
+  ],
+  "host_permissions": [
+    "https://*.instructure.com/*"
+  ],
+  "optional_host_permissions": [
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "ui/popup.html",
+    "default_title": "Coursedeck",
+    "default_icon": {
+      "16": "icons/16.png",
+      "32": "icons/32.png",
+      "48": "icons/48.png",
+      "128": "icons/128.png"
+    }
+  },
+  "options_page": "ui/settings.html",
+  "icons": {
+    "16": "icons/16.png",
+    "32": "icons/32.png",
+    "48": "icons/48.png",
+    "128": "icons/128.png"
+  },
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Alt+Shift+C"
+      },
+      "description": "Open Coursedeck"
+    }
+  },
+  "homepage_url": "https://github.com/CyberWizardYT9/coursedeck"
+}

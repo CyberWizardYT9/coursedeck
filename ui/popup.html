@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Coursedeck</title>
+<link rel="stylesheet" href="app.css">
+<style>
+  body{width:370px;max-height:560px;overflow:auto}
+  .p{padding:13px 14px}
+  .row.top{justify-content:space-between;margin-bottom:11px}
+  .mini{border-left:3px solid var(--line);padding:6px 0 6px 9px;margin-bottom:7px}
+  .mini.b-overdue,.mini.b-today{border-left-color:var(--red)}
+  .mini.b-tomorrow{border-left-color:var(--amber)}
+  .mini .t{font-weight:650;font-size:13.5px;line-height:1.35}
+  .mini .m{font-size:11.5px;color:var(--mute);margin-top:2px}
+  .mini a{text-decoration:none;color:inherit;display:block}
+  .mini a:hover .t{text-decoration:underline}
+</style>
+</head>
+<body>
+<div class="p">
+  <div class="row top">
+    <span style="display:flex;align-items:center;gap:8px">
+      <img src="../icons/128.png" alt="" width="22" height="22" style="border-radius:6px;display:block">
+      <b style="font-size:15px">Coursedeck</b></span>
+    <div class="row" style="gap:6px">
+      <button class="btn alt sm" id="sync">Sync</button>
+      <button class="btn sm" id="open">Open</button>
+    </div>
+  </div>
+  <div id="body"><div class="sub">loading…</div></div>
+</div>
+<script type="module" src="popup.js"></script>
+</body>
+</html>

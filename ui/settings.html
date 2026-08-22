@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Coursedeck settings</title>
+<link rel="stylesheet" href="app.css">
+<style>.wrap{max-width:560px;margin:0 auto;padding:32px 20px 60px}</style>
+</head>
+<body>
+<div class="wrap">
+  <div style="display:flex;align-items:center;gap:11px">
+    <img src="../icons/128.png" alt="" width="34" height="34" style="border-radius:9px;display:block">
+    <h1>Settings</h1>
+  </div>
+  <p class="sub" style="margin-bottom:22px" id="hostline"></p>
+
+  <div class="card">
+    <h3>Syncing</h3>
+    <label class="f" style="margin-top:12px"><span>Check Canvas every</span>
+      <select id="syncMinutes">
+        <option value="15">15 minutes</option>
+        <option value="30">30 minutes</option>
+        <option value="60">hour</option>
+        <option value="180">3 hours</option>
+      </select></label>
+    <label class="sub"><input type="checkbox" id="notifications" style="width:auto"> Remind me before things are due</label>
+    <label class="f" style="margin-top:12px"><span>Remind me this far ahead</span>
+      <select id="notifyHoursAhead">
+        <option value="6">6 hours</option>
+        <option value="12">12 hours</option>
+        <option value="24">1 day</option>
+        <option value="48">2 days</option>
+      </select></label>
+    <label class="sub"><input type="checkbox" id="showActivities" style="width:auto"> Include clubs and activities in the main list</label>
+  </div>
+
+  <div class="card">
+    <h3>School</h3>
+    <label class="f" style="margin-top:12px"><span>Canvas address</span><input id="host"></label>
+    <button class="btn alt sm" id="saveHost">Change school</button>
+  </div>
+
+  <div class="card">
+    <h3>Your data</h3>
+    <p class="sub" style="margin:6px 0 12px">Everything lives on this computer. Back it up before switching machines — your class settings and manual to-dos come with it.</p>
+    <div class="row">
+      <button class="btn alt sm" id="export">Export backup</button>
+      <button class="btn alt sm" id="importBtn">Import backup</button>
+      <input type="file" id="importFile" accept="application/json" style="display:none;width:auto">
+      <button class="btn alt sm" id="reset" style="color:var(--red)">Erase everything</button>
+    </div>
+    <p class="sub" id="dmsg" style="margin-top:10px"></p>
+  </div>
+
+  <div class="card">
+    <h3>What Coursedeck can see</h3>
+    <p class="sub" style="margin-top:6px">It reads your courses, assignments, calendar events, announcements and grades from Canvas using the session you are already signed in to, and writes to-dos you create into your Canvas planner. It sends nothing anywhere else — there is no Coursedeck server.</p>
+  </div>
+</div>
+<script type="module" src="settings.js"></script>
+</body>
+</html>

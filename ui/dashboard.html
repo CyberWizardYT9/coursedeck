@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Coursedeck</title>
+<link rel="stylesheet" href="app.css">
+<style>
+  .wrap{max-width:1080px;margin:0 auto;padding:18px 18px 90px}
+  header.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+  .brand{display:flex;align-items:center;gap:11px;min-width:0}
+  .logo{width:36px;height:36px;border-radius:9px;flex:none;display:block;
+    box-shadow:var(--shadow)}
+
+  nav{display:flex;gap:2px;border-bottom:1px solid var(--line);margin:14px 0 16px;
+    overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  nav::-webkit-scrollbar{display:none}
+  nav button{background:none;border:0;border-bottom:2.5px solid transparent;padding:10px 13px;font:inherit;
+    font-weight:650;font-size:14.5px;color:var(--mute);cursor:pointer;white-space:nowrap}
+  nav button:hover{color:var(--ink)}
+  nav button.on{color:var(--ink);border-bottom-color:var(--ink)}
+  .panel{display:none}.panel.on{display:block}
+
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(84px,1fr));gap:8px;margin-bottom:14px}
+  .stat{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;
+    box-shadow:var(--shadow);cursor:pointer;text-align:left}
+  .stat:hover{border-color:var(--mute)}
+  .stat.on{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+  .stat b{display:block;font-size:23px;letter-spacing:-.035em;line-height:1.1;font-variant-numeric:tabular-nums}
+  .stat span{font-size:11.5px;color:var(--mute);font-weight:600}
+
+  .banner{border-radius:11px;padding:13px 16px;margin-bottom:14px;display:none}
+  .banner.on{display:block}
+  .banner.warn{background:color-mix(in srgb,var(--amber) 13%,var(--card));border:1px solid var(--amber)}
+  .banner.bad{background:color-mix(in srgb,var(--red) 11%,var(--card));border:1px solid var(--red)}
+  .banner.info{background:var(--soft);border:1px solid var(--line)}
+  .banner b{display:block;font-size:15px;margin-bottom:4px}
+  .banner p{margin:0 0 9px;font-size:13.5px;line-height:1.55}
+  .banner p:last-child{margin-bottom:0}
+  .banner ol{margin:0 0 9px;padding-left:19px;font-size:13.5px}
+
+  .calbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:11px;flex-wrap:wrap}
+  .cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+  .cal .h{font-size:11px;color:var(--mute);font-weight:700;text-align:center;padding-bottom:2px}
+  .cal .d{background:var(--card);border:1px solid var(--line);border-radius:8px;min-height:78px;padding:5px;
+    cursor:pointer;overflow:hidden;box-shadow:var(--shadow)}
+  .cal .d:hover{border-color:var(--mute)}
+  .cal .d.today{border-color:var(--red);box-shadow:inset 0 0 0 1px var(--red)}
+  .cal .d.sel{box-shadow:inset 0 0 0 2px var(--blue)}
+  .cal .d.off{opacity:.3;cursor:default;background:transparent;border-style:dashed;box-shadow:none}
+  .cal .n{font-size:11.5px;font-weight:700;color:var(--mute)}
+  .cal .e{font-size:10.5px;margin-top:2px;padding:2px 5px;border-radius:4px;color:#fff;overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap}
+  .cal .more{font-size:10.5px;color:var(--mute);font-weight:600;margin-top:2px}
+  #dayPanel{margin-top:13px}
+  @media (max-width:760px){
+    .cal{gap:3px}
+    .cal .d{min-height:54px;padding:4px}
+    .cal .e{font-size:0;padding:0;height:5px;margin-top:3px;border-radius:3px}
+    .cal .more{display:none}
+  }
+
+  .credit{max-width:430px;margin:14px auto;text-align:center}
+  .credit .mark{width:92px;height:92px;margin:0 auto 15px;border-radius:22px;display:block;
+    box-shadow:var(--shadow-lg)}
+  .credit h2{font-size:25px;margin:0;letter-spacing:-.025em}
+  .social{display:flex;flex-direction:column;gap:7px;margin-top:18px}
+  .social a{display:flex;align-items:center;gap:11px;padding:13px 15px;border:1px solid var(--line);
+    border-radius:11px;background:var(--card);text-decoration:none;color:var(--ink);font-weight:600;
+    box-shadow:var(--shadow)}
+  .social a:hover{border-color:var(--mute);transform:translateY(-1px)}
+  .social .plat{font-size:12px;color:var(--mute);font-weight:700;width:76px;text-align:left;flex:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="brand">
+      <img class="logo" src="../icons/128.png" alt="Coursedeck">
+      <div style="min-width:0">
+        <h1>Coursedeck</h1>
+        <p class="sub" id="who">Getting things ready…</p>
+      </div>
+    </div>
+    <div class="row">
+      <button class="btn alt" id="add">+ Add reminder</button>
+      <button class="btn alt" id="ics">Calendar export</button>
+      <button class="btn" id="sync">Refresh</button>
+    </div>
+  </header>
+
+  <div class="banner" id="banner"></div>
+
+  <nav>
+    <button class="on" data-t="p-now">To do</button>
+    <button data-t="p-grades">Grades</button>
+    <button data-t="p-cal">Calendar</button>
+    <button data-t="p-plans">Week plans</button>
+    <button data-t="p-classes">Classes</button>
+    <button data-t="p-clubs">Clubs</button>
+    <button data-t="p-credits">Credits</button>
+  </nav>
+
+  <section class="panel on" id="p-now">
+    <div class="stats" id="stats"></div>
+    <div class="row" style="margin-bottom:12px;justify-content:space-between">
+      <div class="chips" id="filters"></div>
+      <div class="row" style="gap:4px">
+        <button class="btn ghost sm" id="expandAll">Expand all</button>
+        <button class="btn ghost sm" id="collapseAll">Collapse all</button>
+      </div>
+    </div>
+    <div id="list"></div>
+  </section>
+
+  <section class="panel" id="p-grades">
+    <div class="row" style="justify-content:space-between;margin-bottom:13px">
+      <div class="chips" id="gFilters"></div>
+      <div class="sub" id="gNote"></div>
+    </div>
+    <div id="gSummary" class="grid wide" style="margin-bottom:18px"></div>
+    <h2 style="font-size:13.5px;margin:0 0 9px;font-weight:700">Recently returned</h2>
+    <div id="gRecent"></div>
+  </section>
+
+  <section class="panel" id="p-cal">
+    <div class="calbar">
+      <div class="row">
+        <button class="btn alt sm" id="prev">‹</button>
+        <b id="monthlabel" style="font-size:16px;min-width:148px;text-align:center"></b>
+        <button class="btn alt sm" id="next">›</button>
+        <button class="btn ghost sm" id="today">Today</button>
+      </div>
+      <div class="sub">Tap any day to see what is on it</div>
+    </div>
+    <div class="cal" id="cal"></div>
+    <div id="dayPanel"></div>
+  </section>
+
+  <section class="panel" id="p-plans">
+    <div class="banner info on" style="margin-bottom:14px">
+      <b>Homework your teachers never turned into an assignment</b>
+      <p>Some teachers write the week's work on a page inside Canvas instead of creating a real assignment.
+      Canvas never reminds you about those. Coursedeck opens the week that covers today.</p>
+    </div>
+    <div class="chips" id="wpTabs" style="margin-bottom:11px"></div>
+    <div id="wpBody"></div>
+  </section>
+
+  <section class="panel" id="p-classes">
+    <p class="sub" style="margin-bottom:13px;font-size:13.5px">Tell Coursedeck how strict each teacher is.
+      That is what decides the order of your to-do list.</p>
+    <div class="grid" id="classes"></div>
+  </section>
+
+  <section class="panel" id="p-clubs">
+    <div class="row" style="margin-bottom:13px;justify-content:space-between">
+      <p class="sub" style="margin:0;font-size:13.5px">Clubs, homerooms and info pages, kept out of your homework list.</p>
+      <label class="inline"><input type="checkbox" id="mixClubs"> Also show club work in my to-do list</label>
+    </div>
+    <div class="grid" id="clubs"></div>
+  </section>
+
+  <section class="panel" id="p-credits">
+    <div class="credit">
+      <img class="mark" src="../icons/128.png" alt="Coursedeck">
+      <h2>Lucas Segelnick</h2>
+      <p class="sub" style="font-size:14.5px;margin-top:7px">Built Coursedeck so students could see everything
+        in one place instead of clicking through Canvas one class at a time.</p>
+      <div class="social">
+        <a href="https://instagram.com/cyberwizard_official" target="_blank" rel="noopener">
+          <span class="plat">Instagram</span><span>@cyberwizard_official</span></a>
+        <a href="https://tiktok.com/@cyberwizard_" target="_blank" rel="noopener">
+          <span class="plat">TikTok</span><span>@cyberwizard_</span></a>
+        <a href="https://snapchat.com/add/cyberwizard_yt" target="_blank" rel="noopener">
+          <span class="plat">Snapchat</span><span>@cyberwizard_yt</span></a>
+        <a href="https://x.com/CyberWiz_YT" target="_blank" rel="noopener">
+          <span class="plat">X</span><span>@CyberWiz_YT</span></a>
+      </div>
+      <p class="sub" style="margin-top:22px;font-size:12.5px">
+        Coursedeck <span id="ver"></span> · free and open source · MIT licensed<br>
+        Independent project. Not affiliated with Instructure. Canvas is their trademark.
+      </p>
+      <div class="row" style="justify-content:center;margin-top:14px">
+        <button class="btn alt sm" id="openSettings">Settings</button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div class="modal" id="modal"><div class="box">
+  <h3>Add your own reminder</h3>
+  <p class="sub" style="margin-bottom:16px">For anything Canvas does not know about — studying, buying supplies,
+    a club meeting. It saves into Canvas, so it shows on your phone too.</p>
+  <label class="f"><span>What do you need to do?</span>
+    <input id="f-title" placeholder="Study for the physics quiz"></label>
+  <label class="f"><span>When?</span><input id="f-due" type="datetime-local"></label>
+  <label class="f"><span>Which class?</span><em>Leave as Personal if it is not about a class.</em>
+    <select id="f-course"></select></label>
+  <label class="f"><span>Does it repeat?</span><select id="f-repeat">
+    <option value="">Just once</option>
+    <option value="daily">Every day</option>
+    <option value="weekly">Every week</option>
+    <option value="biweekly">Every 2 weeks</option>
+  </select></label>
+  <label class="f"><span>Notes</span><textarea id="f-details" placeholder="Optional"></textarea></label>
+  <p class="sub" id="f-hint" style="margin-bottom:14px"></p>
+  <div class="row" style="justify-content:flex-end">
+    <button class="btn alt" id="f-cancel">Cancel</button>
+    <button class="btn" id="f-save">Add reminder</button>
+  </div>
+</div></div>
+
+<div class="modal" id="icsModal"><div class="box">
+  <h3>Put your due dates in your calendar app</h3>
+  <p class="sub" style="margin-bottom:16px">This makes a file with everything that has a date on it. Open that file
+    and your calendar app will offer to import it.</p>
+  <ol class="steps">
+    <li>Press <b>Download the file</b> below. It saves as <code>coursedeck.ics</code>.</li>
+    <li><b>iPhone / Mac:</b> open the downloaded file — Apple Calendar offers to add the events.<br>
+        <b>Google Calendar:</b> calendar.google.com → Settings → Import &amp; export → Import → pick the file.</li>
+    <li>Do it again whenever you want to refresh. This is a one-time copy, not a live link.</li>
+  </ol>
+  <p class="sub" id="icsCount" style="margin-bottom:14px"></p>
+  <div class="row" style="justify-content:flex-end">
+    <button class="btn alt" id="ics-cancel">Close</button>
+    <button class="btn" id="ics-go">Download the file</button>
+  </div>
+</div></div>
+
+<div id="toasts" aria-live="polite"></div>
+
+<script type="module" src="dashboard.js"></script>
+</body>
+</html>
