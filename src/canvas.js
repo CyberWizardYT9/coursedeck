@@ -5,7 +5,7 @@
 
 import {
   shortName, fromAssignment, fromEvent, fromPlannerNote, fromGraded,
-  plainText, parseAgenda, pickAgendaPage
+  plainText, parseAgenda, pickAgendaPage, normalizeHost
 } from "./model.js";
 
 export class CanvasError extends Error {
@@ -16,7 +16,7 @@ export class CanvasError extends Error {
    cookie policy blocks that, we fall back to running the same request inside a
    real Canvas tab, where it is unambiguously first-party. */
 export class Transport {
-  constructor(host) { this.host = host; this.mode = "direct"; }
+  constructor(host) { this.host = normalizeHost(host); this.mode = "direct"; }
 
   base() { return `https://${this.host}`; }
 
@@ -24,6 +24,7 @@ export class Transport {
     const res = await fetch(this.base() + path, {
       credentials: "include",
       redirect: "follow",
+      signal: AbortSignal.timeout(20000),
       ...init,
       headers: { Accept: "application/json", ...(init && init.headers) }
     });
@@ -43,6 +44,7 @@ export class Transport {
       func: async (p, i) => {
         const r = await fetch(p, {
           credentials: "same-origin",
+          signal: AbortSignal.timeout(20000),
           ...(i || {}),
           headers: { Accept: "application/json", ...((i && i.headers) || {}) }
         });
@@ -65,7 +67,7 @@ export class Transport {
       // retry inside a real Canvas tab, where the request is unambiguously
       // first-party. A plain network TypeError has no .code, so catch that too.
       const retryable = err.code === 401 || err.code === 403 || err.code === 0 || err.code === undefined;
-      if (retryable && this.mode !== "tab") {
+      if (retryable && (!init?.method || init.method === "GET")) {
         this.mode = "tab";
         try { return await this.viaTab(path, init); }
         catch (err2) { throw err2; }
@@ -86,7 +88,7 @@ async function ensureCanvasTab(host) {
       }
     };
     chrome.tabs.onUpdated.addListener(listener);
-    setTimeout(res, 12000);
+    setTimeout(() => { chrome.tabs.onUpdated.removeListener(listener); res(); }, 12000);
   });
   return tab.id;
 }
@@ -98,21 +100,27 @@ function nextLink(link) {
 
 export class Canvas {
   constructor(host) {
-    this.host = host;
-    this.t = new Transport(host);
+    this.host = normalizeHost(host);
+    this.t = new Transport(this.host);
+    this.warnings = [];
+  }
+
+  warn(section, message, courseId = null) {
+    if (!this.warnings.some(w => w.section === section && w.courseId === courseId)) this.warnings.push({ section, message, courseId });
   }
 
   async get(path) { return (await this.t.request(path)).body; }
 
-  async getAll(path, cap = 10) {
+  async getAll(path, cap = 10, allowPartial = false) {
     let out = [], p = path, n = 0;
     while (p && n++ < cap) {
       const { body, link } = await this.t.request(p);
-      if (!Array.isArray(body)) return Array.isArray(out) && out.length ? out : body;
+      if (!Array.isArray(body)) throw new CanvasError("Canvas returned an unexpected response. Please try again.", 0);
       out = out.concat(body);
       const nx = nextLink(link);
       p = nx ? nx.replace(/^https?:\/\/[^/]+/, "") : null;
     }
+    if (p && !allowPartial) throw new CanvasError("Canvas returned more pages than could be loaded. Please try again.", 0);
     return out;
   }
 
@@ -133,6 +141,9 @@ export class Canvas {
   async write(path, method, payload) {
     const token = await this.csrf();
     if (!token) throw new CanvasError("no CSRF token — open Canvas and sign in", 401);
+    // CSRF and session cookies belong to the same first-party Canvas tab.
+    // Never retry POST after a network failure: the first request may have saved.
+    this.t.mode = "tab";
     return (await this.t.request(path, {
       method,
       headers: { "Content-Type": "application/json", "X-CSRF-Token": token },
@@ -155,7 +166,7 @@ export class Canvas {
     if (!Array.isArray(raw)) return [];
     const seen = new Set();
     return raw.filter(c => {
-      if (!c || !c.id || c.access_restricted_by_date) return false;
+      if (!c || !c.id || c.access_restricted_by_date || (c.workflow_state && c.workflow_state !== "available")) return false;
       if (seen.has(c.id)) return false;
       seen.add(c.id); return true;
     }).map(c => ({
@@ -200,7 +211,7 @@ export class Canvas {
       try {
         const r = await this.getAll(`/api/v1/announcements?${q}&start_date=${sinceISO}&per_page=40`, 2);
         if (Array.isArray(r)) out.push(...r);
-      } catch { /* a single bad context shouldn't kill the sync */ }
+      } catch { this.warn("announcements", "Announcements could not be refreshed. Saved announcements are shown when available."); }
     }
     return out;
   }
@@ -211,7 +222,7 @@ export class Canvas {
       const r = await this.get("/api/v1/account_calendars?per_page=50");
       const list = (r && r.account_calendars) || r;
       return Array.isArray(list) ? list.map(a => ({ id: a.id, name: a.name })) : [];
-    } catch { return []; }
+    } catch { this.warn("calendar", "The school calendar could not be refreshed. Saved events are shown when available."); return []; }
   }
 
   /* Pulls the school-wide calendar (holidays, exam weeks, early dismissals)
@@ -227,7 +238,7 @@ export class Canvas {
           `/api/v1/calendar_events?type=event&start_date=${startISO}&end_date=${endISO}&per_page=100&${q}`, 4
         );
         if (Array.isArray(r)) out.push(...r);
-      } catch { /* skip unreadable contexts */ }
+      } catch { this.warn("calendar", "Some calendar events could not be refreshed. Saved events are shown when available."); }
     }
     return out;
   }
@@ -236,7 +247,7 @@ export class Canvas {
     try {
       const r = await this.getAll("/api/v1/users/self/groups?per_page=50", 2);
       return Array.isArray(r) ? r.map(g => ({ id: g.id, name: g.name, courseId: g.course_id || null })) : [];
-    } catch { return []; }
+    } catch { this.warn("groups", "Groups could not be refreshed. Saved groups are shown when available."); return []; }
   }
 
   /* ------------------------------------------------- planner notes (write) */
@@ -268,10 +279,10 @@ export class Canvas {
     try {
       const r = await this.getAll(
         `/api/v1/users/self/graded_submissions?per_page=${Math.min(100, limit)}` +
-        `&include[]=assignment&include[]=submission_comments`, 2
+        `&include[]=assignment&include[]=submission_comments`, 2, true
       );
       return Array.isArray(r) ? r : [];
-    } catch { return []; }
+    } catch { this.warn("grades", "Grades could not be refreshed. Saved grades are shown when available."); return []; }
   }
 
   /* -------------------------------------- weekly agenda pages (the good bit)
@@ -280,13 +291,18 @@ export class Canvas {
      work. We surface those pages so it stops disappearing. */
   async agendaPages(courseId) {
     let mods;
-    try { mods = await this.getAll(`/api/v1/courses/${courseId}/modules?include[]=items&per_page=25`, 2); }
-    catch { return []; }
+    try { mods = await this.getAll(`/api/v1/courses/${courseId}/modules?include[]=items&per_page=50`); }
+    catch { this.warn("agenda", "Some weekly plans could not be refreshed. Saved plans are shown when available.", courseId); return []; }
     if (!Array.isArray(mods)) return [];
     const hits = [];
+    const seen = new Set();
     for (const m of mods) {
-      for (const it of (m.items || [])) {
+      let entries = m.items || [];
+      if (!m.items || m.items_count > entries.length) entries = await this.getAll(`/api/v1/courses/${courseId}/modules/${m.id}/items?per_page=100`);
+      for (const it of entries) {
         if (it.type === "Page" && it.page_url && /week\s*\d+|agenda|lesson plan/i.test(it.title || "")) {
+          if (seen.has(it.page_url)) continue;
+          seen.add(it.page_url);
           hits.push({ title: it.title, pageUrl: it.page_url, htmlUrl: it.html_url });
         }
       }
@@ -298,7 +314,7 @@ export class Canvas {
     try {
       const p = await this.get(`/api/v1/courses/${courseId}/pages/${encodeURIComponent(pageUrl)}`);
       return { title: p.title, text: plainText(p.body), url: p.html_url, updated: p.updated_at };
-    } catch { return null; }
+    } catch { this.warn("agenda", "Some weekly plans could not be refreshed. Saved plans are shown when available.", courseId); return null; }
   }
 }
 
@@ -320,6 +336,8 @@ async function inBatches(list, size, fn, tick) {
 
 export async function fullSync(host, opts = {}) {
   const api = new Canvas(host);
+  let previous = opts.previous?.host === host ? opts.previous : null;
+  const isCurrentCourse = item => courses.some(c => String(c.id) === String(item.courseId));
   /* Progress is reported as coarse weighted steps so the UI can show a real
      bar rather than an indeterminate spinner for 40 seconds. */
   const report = typeof opts.onProgress === "function" ? opts.onProgress : () => {};
@@ -328,6 +346,7 @@ export async function fullSync(host, opts = {}) {
 
   report({ done: 0, total, pct: 2, label: "Signing in to Canvas" });
   const user = await api.me();
+  if (previous?.user?.id !== user.id) previous = null;
   step("Reading your class list");
 
   const courses = await api.courses();
@@ -345,13 +364,19 @@ export async function fullSync(host, opts = {}) {
   /* ---- assignments for every course, 4 at a time ---- */
   const asgByCourse = await inBatches(courses, 4, async c => {
     let asg = [];
-    try { asg = await api.assignments(c.id); } catch { asg = []; }
-    return { c, asg };
+    try { asg = await api.assignments(c.id); return { c, asg, failed: false }; }
+    catch {
+      api.warn("assignments", `${c.short}: assignments could not be refreshed. ${previous ? "Showing saved work." : "Refresh to try again."}`, c.id);
+      return { c, asg: [], failed: true };
+    }
   }, (n, t) => report({ done: done + n * 0.5, total, pct: Math.min(99, Math.round((done + n * 0.5) / total * 100)), label: `Reading assignments (${n} of ${t} classes)` }));
 
-  for (const { c, asg } of asgByCourse) {
-    courseMeta[c.id] = { ...c, assignmentCount: asg.length, activity: Canvas.looksLikeActivity(c, asg.length) };
-    for (const a of asg) items.push(fromAssignment(a, c));
+  for (const { c, asg, failed } of asgByCourse) {
+    const saved = failed ? (previous?.items || []).filter(i => String(i.courseId) === String(c.id) && /^a:/.test(i.uid)) : [];
+    const count = failed ? saved.length : asg.length;
+    courseMeta[c.id] = { ...c, assignmentCount: count, activity: Canvas.looksLikeActivity(c, count) };
+    if (failed) items.push(...saved);
+    else for (const a of asg) items.push(fromAssignment(a, c));
   }
   done += courses.length * 0.5;
 
@@ -361,19 +386,27 @@ export async function fullSync(host, opts = {}) {
     await inBatches(real, 3, async c => {
       try {
         const found = await api.agendaPages(c.id);
-        if (!found.length) return;
+        if (!found.length) {
+          if (api.warnings.some(w => w.section === "agenda" && w.courseId === c.id) && previous?.agenda?.[c.id]) agenda[c.id] = previous.agenda[c.id];
+          return;
+        }
         found.sort((x, y) => weekNum(x.title) - weekNum(y.title));
-        const wanted = found.slice(0, 16);
-        const loaded = (await Promise.all(wanted.map(async p => {
+        const wanted = found;
+        const oldPages = previous?.agenda?.[c.id]?.pages || [];
+        const loaded = (await inBatches(wanted, 4, async p => {
           const full = await api.page(c.id, p.pageUrl);
+          if (!full) return oldPages.find(old => old.pageUrl === p.pageUrl) || { ...p, courseId: c.id, text: "", parsed: null, unavailable: true };
           const text = full ? full.text : "";
           return { title: p.title, pageUrl: p.pageUrl, htmlUrl: p.htmlUrl, courseId: c.id, text, parsed: text ? parseAgenda(text) : null };
-        }))).filter(Boolean);
+        })).filter(Boolean);
         // Parsed here rather than in the UI so we can open the page that
         // actually covers today instead of the highest week number.
         const current = pickAgendaPage(loaded);
         agenda[c.id] = { pages: loaded, currentPageUrl: current ? current.pageUrl : (loaded[0] && loaded[0].pageUrl) || null };
-      } catch { /* non-fatal */ }
+      } catch {
+        api.warn("agenda", "Some weekly plans could not be refreshed. Saved plans are shown when available.", c.id);
+        if (previous?.agenda?.[c.id]) agenda[c.id] = previous.agenda[c.id];
+      }
     }, (n, t) => report({ done: done + n * 0.5, total, pct: Math.min(99, Math.round((done + n * 0.5) / total * 100)), label: `Reading weekly plans (${n} of ${t} classes)` }));
     done += real.length * 0.5;
   }
@@ -391,17 +424,25 @@ export async function fullSync(host, opts = {}) {
     const cid = /course_(\d+)/.exec(e.context_code || "");
     items.push(fromEvent(e, cid ? byId.get(Number(cid[1])) : null));
   }
+  if (api.warnings.some(w => w.section === "calendar")) {
+    const ids = new Set(items.map(i => i.uid));
+    items.push(...(previous?.items || []).filter(i => i.kind === "event" && !ids.has(i.uid) && (!i.courseId || isCurrentCourse(i))));
+  }
 
   step("Reading your reminders");
   let notes = [];
-  try { notes = await api.plannerNotes(); } catch { notes = []; }
+  try { notes = await api.plannerNotes(); } catch {
+    api.warn("notes", "Canvas reminders could not be refreshed. Saved reminders are shown when available.");
+    items.push(...(previous?.items || []).filter(i => /^n:/.test(i.uid) && (!i.courseId || isCurrentCourse(i))));
+  }
   for (const n of notes) {
     if (n.workflow_state === "deleted") continue;
     items.push(fromPlannerNote(n, byId.get(n.course_id)));
   }
 
   step("Reading announcements");
-  const groups = await api.groups();
+  let groups = await api.groups();
+  if (api.warnings.some(w => w.section === "groups")) groups = previous?.groups || groups;
   const since = new Date(now.getTime() - 7 * 864e5).toISOString().slice(0, 10);
   let announcements = [];
   try {
@@ -409,7 +450,8 @@ export async function fullSync(host, opts = {}) {
       id: a.id, title: a.title, courseId: Number(String(a.context_code || "").replace("course_", "")) || null,
       posted: a.posted_at, url: a.html_url, text: plainText(a.message).slice(0, 500)
     }));
-  } catch { /* non-fatal */ }
+  } catch { api.warn("announcements", "Announcements could not be refreshed."); }
+  if (api.warnings.some(w => w.section === "announcements")) announcements = previous?.announcements?.filter(isCurrentCourse) || announcements;
 
   step("Reading your grades");
   /* Graded work, restricted to courses the user is currently enrolled in —
@@ -421,13 +463,14 @@ export async function fullSync(host, opts = {}) {
       .filter(s => s && s.assignment && byId.has(s.assignment.course_id))
       .map(s => fromGraded(s, byId.get(s.assignment.course_id)))
       .sort((a, b) => String(b.gradedAt || "").localeCompare(String(a.gradedAt || "")));
-  } catch { grades = []; }
+  } catch { api.warn("grades", "Grades could not be refreshed."); }
+  if (api.warnings.some(w => w.section === "grades")) grades = previous?.grades?.filter(isCurrentCourse) || grades;
 
   report({ done: total, total, pct: 100, label: "Done" });
   return {
     host, user: { id: user.id, name: user.name },
     courses: Object.values(courseMeta),
-    items, agenda, groups, announcements, grades,
+    items, agenda, groups, announcements, grades, warnings: api.warnings,
     accountCalendars: accountCals,
     syncedAt: new Date().toISOString()
   };

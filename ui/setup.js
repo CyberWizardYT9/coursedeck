@@ -1,38 +1,31 @@
-import { setState, getState } from "../src/store.js";
+import { switchSchool, getState } from "../src/store.js";
+import { normalizeHost } from "../src/model.js";
+import { sendMessage, applyTheme } from "./shared.js";
 
 const $ = s => document.querySelector(s);
-const send = msg => new Promise(res => chrome.runtime.sendMessage(msg, res));
-
-function cleanHost(v) {
-  return String(v || "").trim()
-    .replace(/^https?:\/\//i, "")
-    .replace(/\/.*$/, "")
-    .replace(/^www\./i, "")
-    .toLowerCase();
-}
+const send = sendMessage;
 
 /* Pre-fill only if this browser has already been connected before.
    Otherwise the field stays empty with a placeholder as a hint — we never
    guess a school on someone's behalf. */
 (async () => {
   const s = await getState();
+  applyTheme(s.settings);
   if (s.host) $("#host").value = s.host;
 })();
 
 $("#host").addEventListener("keydown", e => { if (e.key === "Enter") $("#check").click(); });
 
 $("#check").onclick = async () => {
-  const host = cleanHost($("#host").value);
   const msg = $("#msg");
-
-  if (!host || !host.includes(".")) {
-    msg.innerHTML = `<span class="bad">That does not look like a web address. It should look like <b>yourschool.instructure.com</b>.</span>`;
-    return;
-  }
+  let host;
+  try { host = normalizeHost($("#host").value); }
+  catch (error) { msg.textContent = error.message; $("#host").focus(); return; }
 
   $("#check").disabled = true;
   msg.innerHTML = `<span class="spin"></span> Checking…`;
 
+  try {
   if (!/\.instructure\.com$/.test(host)) {
     const granted = await chrome.permissions.request({ origins: [`https://${host}/*`] });
     if (!granted) {
@@ -41,8 +34,7 @@ $("#check").onclick = async () => {
       return;
     }
   }
-
-  await setState({ host });
+  } catch { msg.textContent = "Site permission could not be granted. Please try Connect again."; $("#check").disabled = false; return; }
   const r = await send({ type: "verify", host });
 
   if (!r || !r.ok) {
@@ -58,12 +50,14 @@ $("#check").onclick = async () => {
     return;
   }
 
+  await switchSchool(host);
+
   /* connected — start the first sync straight away */
   msg.textContent = "";
   $("#connectbox").style.display = "none";
   $("#donebox").style.display = "block";
   $("#hello").textContent = `Hi ${String(r.user.name || "").split(" ")[0]}!`;
-  $("#doneMsg").innerHTML = `<span class="spin"></span> Loading your classes and homework. This takes 10–20 seconds.`;
+  $("#doneMsg").innerHTML = `<span class="spin"></span> Loading your classes and homework. The first refresh can take about a minute.`;
   $("#prog").style.width = "45%";
 
   const res = await send({ type: "sync" });
@@ -76,7 +70,7 @@ $("#check").onclick = async () => {
     $("#open").textContent = "Show me my work";
   } else {
     $("#doneMsg").innerHTML = `<span class="bad">Connected, but loading your classes did not finish.</span><br>
-      Open the dashboard and press <b>Refresh now</b> — it will tell you what went wrong.`;
+      Open the dashboard and press <b>Refresh</b> — it will tell you what went wrong.`;
     $("#open").disabled = false;
     $("#open").textContent = "Open Coursedeck anyway";
   }

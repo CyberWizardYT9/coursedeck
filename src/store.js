@@ -1,5 +1,6 @@
 /* Coursedeck — storage layer. Everything lives in chrome.storage.local on the
    student's own machine. Nothing is sent anywhere. */
+import { normalizeHost } from "./model.js";
 
 const DEFAULTS = {
   host: null,                 // e.g. "sta.instructure.com"
@@ -13,7 +14,8 @@ const DEFAULTS = {
     notifications: true,
     showActivities: false,   // clubs get their own tab; they used to flood the list
     weekStart: 0,
-    density: "compact"
+    density: "compact",
+    theme: "system"
   },
   cache: null,                // last fullSync payload
   lastError: null
@@ -57,6 +59,21 @@ export async function dismiss(uid) {
   return [...set];
 }
 
+/* Keep local work separate and recoverable when moving between schools. */
+export async function switchSchool(host) {
+  const target = normalizeHost(host), state = await getState();
+  if (state.host === target) return setState({ host: target, lastError: null });
+  const profiles = { ...(state.schoolProfiles || {}) };
+  if (state.host) profiles[state.host] = { courseCfg: state.courseCfg, localEvents: state.localEvents, doneLocal: state.doneLocal, dismissed: state.dismissed };
+  const profile = profiles[target] || { courseCfg: {}, localEvents: [], doneLocal: [], dismissed: [] };
+  return setState({ ...profile, schoolProfiles: profiles, host: target, cache: null, lastError: null, notified: [], syncProgress: null });
+}
+
+export async function restoreDismissed(uid) {
+  const s = await getState();
+  await chrome.storage.local.set({ dismissed: s.dismissed.filter(id => id !== uid) });
+}
+
 export async function addLocalEvent(ev) {
   const s = await getState();
   const item = { id: crypto.randomUUID(), created: new Date().toISOString(), ...ev };
@@ -86,14 +103,34 @@ export async function exportBackup() {
 }
 
 export async function importBackup(json) {
+  const d = validateBackup(json);
+  await chrome.storage.local.set({ ...d, cache: null, lastError: null, notified: [], syncProgress: null });
+}
+
+export function validateBackup(json) {
   const d = JSON.parse(json);
   if (!d || d.version !== 1) throw new Error("Not a Coursedeck backup file");
-  await chrome.storage.local.set({
-    host: d.host || null,
+  const record = x => x && typeof x === "object" && !Array.isArray(x);
+  if (!record(d.courseCfg || {}) || !record(d.settings || {}) ||
+      ![d.localEvents || [], d.doneLocal || [], d.dismissed || []].every(Array.isArray)) throw new Error("Invalid backup structure");
+  if (![...(d.doneLocal || []), ...(d.dismissed || [])].every(x => typeof x === "string")) throw new Error("Invalid saved item IDs");
+  for (const [id, cfg] of Object.entries(d.courseCfg || {})) {
+    if (!/^\d+$/.test(id) || !record(cfg) || (cfg.color && !/^#[a-f\d]{6}$/i.test(cfg.color))) throw new Error("Invalid course settings");
+  }
+  for (const item of d.localEvents || []) {
+    if (!record(item) || typeof item.id !== "string" || typeof item.title !== "string" ||
+      (item.due && isNaN(new Date(item.due))) ||
+      (item.repeat && (!item.due || !["daily", "weekly", "biweekly"].includes(item.repeat)))) throw new Error("Invalid reminder");
+  }
+  const settings = { ...DEFAULTS.settings, ...(d.settings || {}) };
+  if (![15, 30, 60, 180].includes(Number(settings.syncMinutes)) || ![6, 12, 24, 48].includes(Number(settings.notifyHoursAhead))) throw new Error("Invalid reminder settings");
+  settings.theme = ["light", "dark"].includes(settings.theme) ? settings.theme : "system";
+  return {
+    host: d.host ? normalizeHost(d.host) : null,
     courseCfg: d.courseCfg || {},
     localEvents: d.localEvents || [],
     doneLocal: d.doneLocal || [],
     dismissed: d.dismissed || [],
-    settings: { ...DEFAULTS.settings, ...(d.settings || {}) }
-  });
+    settings
+  };
 }

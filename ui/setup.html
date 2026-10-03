@@ -20,22 +20,21 @@
   @keyframes sp{to{transform:rotate(360deg)}}
 </style>
 </head>
-<body>
+<body class="setup-page">
 <div class="wrap">
   <img src="../icons/128.png" alt="Coursedeck" width="82" height="82"
        style="border-radius:20px;display:block;margin-bottom:16px;box-shadow:0 8px 26px rgba(0,0,0,.18)">
   <h1 class="big-title">Welcome to Coursedeck</h1>
-  <p class="lede">All your classes, homework and clubs in one place. Let's connect it to your school — this takes about 30 seconds.</p>
+  <p class="lede">Less digging through Canvas. More room for your day. Connect your school to bring everything together.</p>
 
   <div class="card" id="connectbox">
     <h3 style="font-size:18px">What is your school's Canvas address?</h3>
     <p class="sub" style="margin:7px 0 15px;font-size:14px">
-      Open Canvas in another tab and look at the top of your browser. Copy the bit
-      <b>before the first slash</b> — for example <code>sta.instructure.com</code>.</p>
+      Copy the address from your school's Canvas page. You can paste the whole link — we'll find the domain.</p>
     <label class="f"><span>Canvas address</span>
-      <input id="host" placeholder="sta.instructure.com" autocomplete="off" spellcheck="false"></label>
-    <button class="btn big" id="check">Connect</button>
-    <div class="msg" id="msg"></div>
+      <input id="host" placeholder="yourschool.instructure.com" autocomplete="off" spellcheck="false" aria-describedby="msg"></label>
+    <button class="btn big primary" id="check">Connect to Canvas</button>
+    <div class="msg" id="msg" role="status" aria-live="polite"></div>
   </div>
 
   <div class="card" id="donebox" style="display:none">
@@ -47,7 +46,7 @@
 
   <h2 style="margin-top:34px">Good to know</h2>
   <div class="step"><div class="num">1</div><div>Coursedeck uses the Canvas login you <b>already have open in this browser</b>. There is no new password, no code to paste, and no account to make.</div></div>
-  <div class="step"><div class="num">2</div><div>Everything stays on this computer. Nothing is uploaded anywhere.</div></div>
+  <div class="step"><div class="num">2</div><div>Your coursework is saved on this computer. Reminders you create sync to your own Canvas planner when possible. There is no Coursedeck server.</div></div>
   <div class="step"><div class="num">3</div><div>If you ever get signed out of Canvas, just sign back in as normal. Coursedeck picks up again on its own.</div></div>
 </div>
 <script type="module" src="setup.js"></script>

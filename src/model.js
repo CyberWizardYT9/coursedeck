@@ -22,7 +22,25 @@ export const PALETTE = [
 ];
 
 export function colorFor(id, i) {
-  return PALETTE[(Number(id) + (i || 0)) % PALETTE.length];
+  return PALETTE[Math.abs((Number(id) || 0) + (i || 0)) % PALETTE.length];
+}
+
+/* Accept a pasted Canvas URL, but never credentials, ports or arbitrary markup. */
+export function normalizeHost(value) {
+  const input = String(value || "").trim();
+  if (!input || /[<>"'\s]/.test(input)) throw new Error("Enter your school's Canvas web address.");
+  let url;
+  try { url = new URL(/^https?:\/\//i.test(input) ? input : `https://${input}`); }
+  catch { throw new Error("Enter a valid Canvas address, such as school.instructure.com."); }
+  if (!/^https?:$/.test(url.protocol) || url.username || url.password || url.port ||
+      !/^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/i.test(url.hostname)) {
+    throw new Error("Enter your school's Canvas domain, without a username or port.");
+  }
+  return url.hostname.toLowerCase();
+}
+
+export function shiftMonth(date, delta) {
+  return new Date(date.getFullYear(), date.getMonth() + delta, 1);
 }
 
 /* ---------------------------------------------------------------- helpers */
@@ -138,6 +156,7 @@ export function fromEvent(e, ctx) {
     due: e.start_at || null,
     endAt: e.end_at || null,
     allDay: !!e.all_day,
+    allDayDate: e.all_day_date || null,
     location: e.location_name || null,
     points: null,
     url: e.html_url || null,
@@ -194,6 +213,7 @@ export function expandRepeats(ev, fromISO, toISO) {
   if (!ev.repeat || !ev.due) return [ev];
   const start = new Date(ev.due);
   const from = new Date(fromISO), to = new Date(toISO);
+  if ([start, from, to].some(d => isNaN(d))) return [];
   const stepDays = ev.repeat === "daily" ? 1 : ev.repeat === "weekly" ? 7 : ev.repeat === "biweekly" ? 14 : 0;
   if (!stepDays) return [ev];
   const out = [];
@@ -263,7 +283,12 @@ export function priority(item, courseCfg, now) {
 
 export function bucketOf(item, now) {
   if (item.done) return "done";
-  const d = daysUntil(item.due, now);
+  if (item.kind === "event" && item.due) {
+    const end = item.endAt ? new Date(item.endAt) : new Date(item.due);
+    if (item.allDay ? daysUntil(item.allDayDate ? `${item.allDayDate}T12:00:00` : item.due, now) < 0
+      : end < (now ? new Date(now) : new Date())) return "past";
+  }
+  const d = daysUntil(item.allDay && item.allDayDate ? `${item.allDayDate}T12:00:00` : item.due, now);
   if (d === null) return "undated";
   if (d < -STALE_DAYS) return "stale";
   if (d < 0) return "overdue";
@@ -273,10 +298,10 @@ export function bucketOf(item, now) {
   return "later";
 }
 
-export const BUCKET_ORDER = ["overdue", "today", "tomorrow", "week", "later", "undated", "stale", "done"];
+export const BUCKET_ORDER = ["overdue", "today", "tomorrow", "week", "later", "undated", "past", "stale", "done"];
 export const BUCKET_LABEL = {
   overdue: "Overdue", today: "Today", tomorrow: "Tomorrow", week: "This week",
-  later: "Later", undated: "No due date", stale: "From a while ago", done: "Done"
+  later: "Later", undated: "No due date", past: "Past events", stale: "From a while ago", done: "Done"
 };
 
 /* ------------------------------------------------------------------ merge */
@@ -332,12 +357,14 @@ function icsStamp(iso) {
   return d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
 }
 function fold(line) {
-  if (line.length <= 73) return line;
-  const parts = [];
-  let s = line;
-  parts.push(s.slice(0, 73));
-  s = s.slice(73);
-  while (s.length) { parts.push(" " + s.slice(0, 72)); s = s.slice(72); }
+  const parts = [], encoder = new TextEncoder();
+  let part = "", size = 0;
+  for (const char of line) {
+    const bytes = encoder.encode(char).length;
+    if (size + bytes > 75) { parts.push(part); part = " "; size = 1; }
+    part += char; size += bytes;
+  }
+  parts.push(part);
   return parts.join("\r\n");
 }
 
@@ -348,14 +375,22 @@ export function toICS(items, calName) {
   ];
   const stamp = icsStamp(new Date().toISOString());
   for (const it of items) {
-    if (!it.due) continue;
+    if (!it.due || isNaN(new Date(it.due))) continue;
     const start = icsStamp(it.due);
     const end = icsStamp(it.endAt || new Date(new Date(it.due).getTime() + 30 * 60000).toISOString());
     out.push("BEGIN:VEVENT");
     out.push(`UID:${icsEscape(it.uid)}@coursedeck`);
     out.push(`DTSTAMP:${stamp}`);
-    out.push(`DTSTART:${start}`);
-    out.push(`DTEND:${end}`);
+    if (it.allDay) {
+      const date = it.allDayDate || dayKey(it.due);
+      const next = new Date(`${date}T12:00:00Z`);
+      next.setUTCDate(next.getUTCDate() + 1);
+      out.push(`DTSTART;VALUE=DATE:${date.replace(/-/g, "")}`);
+      out.push(`DTEND;VALUE=DATE:${next.toISOString().slice(0, 10).replace(/-/g, "")}`);
+    } else {
+      out.push(`DTSTART:${start}`);
+      out.push(`DTEND:${end}`);
+    }
     out.push(fold(`SUMMARY:${icsEscape((it.courseShort ? it.courseShort + " — " : "") + it.title)}`));
     const desc = [it.points ? `${it.points} points` : null, it.submitLabel, it.url].filter(Boolean).join(" · ");
     if (desc) out.push(fold(`DESCRIPTION:${icsEscape(desc)}`));
@@ -374,6 +409,7 @@ export function counts(items, now) {
   for (const it of items) {
     if (it.done) continue;
     const b = bucketOf(it, now);
+    if (b === "past") continue;
     if (b === "stale") { c.stale++; continue; }   // archived work is not "open"
     c.open++;
     if (c[b] !== undefined) c[b]++;
@@ -415,6 +451,7 @@ export function resolveAgendaDate(month, day, now) {
   let best = null, bestGap = Infinity;
   for (const y of [n.getFullYear() - 1, n.getFullYear(), n.getFullYear() + 1]) {
     const d = new Date(y, month - 1, day);
+    if (d.getMonth() !== month - 1 || d.getDate() !== day) continue;
     const gap = Math.abs(d - n);
     if (gap < bestGap) { bestGap = gap; best = d; }
   }
@@ -482,7 +519,9 @@ export function parseAgenda(text, now) {
       work = tail.join("\n").trim();
     }
 
-    const date = resolveAgendaDate(Number(m[1]), Number(m[2]), now);
+    const year = m[3] ? (m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3])) : null;
+    const date = year ? new Date(year, Number(m[1]) - 1, Number(m[2])) : resolveAgendaDate(Number(m[1]), Number(m[2]), now);
+    if (!date || date.getMonth() !== Number(m[1]) - 1 || date.getDate() !== Number(m[2])) continue;
     days.push({
       month: Number(m[1]),
       day: Number(m[2]),

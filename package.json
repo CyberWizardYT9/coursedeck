@@ -1,0 +1,15 @@
+{
+  "name": "coursedeck",
+  "version": "2.5.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node test/model.test.mjs && node test/agenda.test.mjs && node test/regressions.test.mjs && node test/canvas.test.mjs && node test/background.test.mjs && node test/ui.test.mjs && node test/polish.test.mjs && node test/validate.mjs",
+    "dev": "node scripts/preview.mjs",
+    "package": "node scripts/package.mjs"
+  },
+  "devDependencies": {
+    "fflate": "^0.8.3",
+    "jsdom": "^26.1.0"
+  }
+}

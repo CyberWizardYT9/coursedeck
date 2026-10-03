@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Coursedeck",
-  "version": "2.4.0",
+  "version": "2.5.0",
   "description": "One clean dashboard for everything in your Canvas courses - assignments, events, clubs, grades and your own to-dos.",
   "minimum_chrome_version": "116",
   "permissions": [

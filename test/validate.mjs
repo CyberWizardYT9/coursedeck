@@ -4,8 +4,9 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 let problems = [];
 const fail = m => problems.push(m);
 const read = p => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -37,7 +38,7 @@ const jsFiles = [];
 (function walk(dir) {
   for (const e of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
     const rel = path.join(dir, e.name);
-    if (e.isDirectory()) { if (!/node_modules/.test(e.name)) walk(rel); }
+    if (e.isDirectory()) { if (!/^(node_modules|dist|\.git)$/.test(e.name)) walk(rel); }
     else if (/\.(js|mjs)$/.test(e.name)) jsFiles.push(path.posix.normalize(rel.replace(/\\/g, "/")));
   }
 })(".");
@@ -153,9 +154,9 @@ for (const s of sent) if (!handled.has(s)) fail(`message "${s}" is sent by the U
 }
 
 /* ---------------------------------------------------------- syntax check */
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 for (const f of jsFiles) {
-  try { execSync(`node --input-type=module --check < ${JSON.stringify(path.join(ROOT, f))}`, { stdio: "pipe" }); }
+  try { execFileSync(process.execPath, ["--check", path.join(ROOT, f)], { stdio: "pipe" }); }
   catch (e) { fail(`${f}: syntax error — ${String(e.stderr || e).split("\n").slice(0, 3).join(" ")}`); }
 }
 
