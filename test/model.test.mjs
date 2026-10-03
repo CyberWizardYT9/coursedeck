@@ -15,6 +15,9 @@ function t(name, fn) {
 }
 
 const NOW = "2026-08-19T19:00:00-04:00";
+// These fixtures describe a New York school day, including 11:59 p.m. work.
+// A UTC CI runner must interpret the calendar day in the fixture's timezone.
+process.env.TZ = "America/New_York";
 const course = { id: 3528, name: "Cambr AICE Global Pers & Ind Res 1 AS - Mar", short: "Global Pers" };
 
 console.log("\nstate matching");
@@ -190,7 +193,7 @@ t("locally ticked items count as done", () => {
 t("stream sorts overdue first, done last", () => {
   const raw = [
     fromAssignment({ ...rawAssign, id: 1, name: "Later", due_at: "2026-09-30T20:00:00Z" }, course),
-    fromAssignment({ ...rawAssign, id: 2, name: "Overdue", due_at: "2026-08-01T20:00:00Z" }, course),
+    fromAssignment({ ...rawAssign, id: 2, name: "Overdue", due_at: "2026-08-14T20:00:00Z" }, course),
     fromAssignment({ ...rawAssign, id: 3, name: "Finished", submission: { workflow_state: "graded" } }, course)
   ];
   const out = buildStream(raw, {}, { now: NOW });
@@ -199,7 +202,7 @@ t("stream sorts overdue first, done last", () => {
 });
 t("counts ignore completed work", () => {
   const raw = [
-    fromAssignment({ ...rawAssign, id: 1, due_at: "2026-08-01T20:00:00Z" }, course),
+    fromAssignment({ ...rawAssign, id: 1, due_at: "2026-08-14T20:00:00Z" }, course),
     fromAssignment({ ...rawAssign, id: 2, submission: { workflow_state: "graded" } }, course)
   ];
   const c = counts(buildStream(raw, {}, { now: NOW }), NOW);
@@ -242,7 +245,7 @@ t("months-late work goes to the archive, not the top", () => {
   assert.equal(bucketOf(old, NOW), "stale");
   const p = priority(old, {}, NOW);
   assert.ok(p.score < 0, "stale work must not outrank live work, got " + p.score);
-  assert.ok(/last year/i.test(p.reasons[0]));
+  assert.deepEqual(p.reasons, [], "archiving must not guess whether the work was completed or belongs to last year");
 });
 t("recently late work still shouts", () => {
   const recent = { due: "2026-08-14T20:00:00Z", points: 25, missing: true };

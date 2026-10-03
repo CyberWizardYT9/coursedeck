@@ -6,7 +6,7 @@ import { JSDOM } from "jsdom";
 import fs from "node:fs";
 
 const strip = s => s.replace(/^\s*import[\s\S]*?from\s+["'][^"']+["'];?$/gm, "").replace(/^export\s+/gm, "");
-const bundle = ["src/model.js", "src/store.js", "ui/dashboard.js"]
+const bundle = ["src/model.js", "src/store.js", "ui/shared.js", "ui/dashboard.js"]
   .map(f => strip(fs.readFileSync(f, "utf8"))).join("\n");
 const html = fs.readFileSync("ui/dashboard.html", "utf8").replace(/<script[^>]*><\/script>/g, "");
 
@@ -83,6 +83,7 @@ const state = {
 function run(label, payload, checks) {
   const dom = new JSDOM(html, { url: "https://localhost/ui/dashboard.html", runScripts: "outside-only" });
   const w = dom.window;
+  w.scrollTo = () => {};
   const errs = [];
   w.onerror = m => errs.push(String(m));
   w.addEventListener("unhandledrejection", e => errs.push("unhandled: " + ((e.reason && e.reason.message) || e.reason)));
@@ -230,6 +231,7 @@ results.push(await run("legacy cache shape (agenda as bare array)", {
 function boot(addNoteBehaviour, handler) {
   const dom = new JSDOM(html, { url: "https://localhost/ui/dashboard.html", runScripts: "outside-only" });
   const w = dom.window;
+  w.scrollTo = () => {};
   const errs = [];
   w.onerror = m => errs.push(String(m));
   w.addEventListener("unhandledrejection", e => errs.push("unhandled: " + ((e.reason && e.reason.message) || e.reason)));

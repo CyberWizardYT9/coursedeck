@@ -7,13 +7,28 @@
 <link rel="stylesheet" href="app.css">
 <style>.wrap{max-width:560px;margin:0 auto;padding:32px 20px 60px}</style>
 </head>
-<body>
+<body class="settings-page">
 <div class="wrap">
   <div style="display:flex;align-items:center;gap:11px">
     <img src="../icons/128.png" alt="" width="34" height="34" style="border-radius:9px;display:block">
     <h1>Settings</h1>
   </div>
   <p class="sub" style="margin-bottom:22px" id="hostline"></p>
+  <a class="back-link" href="dashboard.html">← Back to your workspace</a>
+  <div class="card">
+    <h3>Make yourself at home</h3>
+    <label class="f" style="margin-top:12px"><span>Appearance</span><select id="theme"><option value="system">Follow my device</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+    <label class="f"><span>Start the calendar week on</span><select id="weekStart"><option value="0">Sunday</option><option value="1">Monday</option></select></label>
+    <p class="sub" id="savedStatus" role="status" aria-live="polite">Preferences save automatically.</p>
+  </div>
+
+  <div class="card">
+    <h3>Keep your list focused</h3>
+    <p class="sub">Older items move into collapsed groups. They remain searchable, and nothing is deleted from Canvas. Choose “Keep in my list” on any item you still need.</p>
+    <label class="f"><span>Move overdue assignments to Older assignments after</span><select id="assignmentArchiveDays"><option value="7">7 days</option><option value="14">14 days</option><option value="30">30 days</option><option value="45">45 days</option><option value="-1">Never</option></select></label>
+    <label class="f"><span>Move dated reminders to Past reminders</span><select id="reminderArchiveDays"><option value="0">The day after their date</option><option value="3">After 3 days</option><option value="7">After 7 days</option><option value="14">After 14 days</option><option value="-1">Never</option></select></label>
+    <p class="sub">Past paper tests and external-tool work go to Check status when Canvas cannot confirm completion. Tick them off when you finish, or keep them in your list.</p>
+  </div>
 
   <div class="card">
     <h3>Syncing</h3>
@@ -37,6 +52,7 @@
 
   <div class="card">
     <h3>School</h3>
+    <p class="sub">Verify a new school before switching. Local reminders and class preferences stay saved separately for each school.</p>
     <label class="f" style="margin-top:12px"><span>Canvas address</span><input id="host"></label>
     <button class="btn alt sm" id="saveHost">Change school</button>
   </div>
@@ -50,7 +66,8 @@
       <input type="file" id="importFile" accept="application/json" style="display:none;width:auto">
       <button class="btn alt sm" id="reset" style="color:var(--red)">Erase everything</button>
     </div>
-    <p class="sub" id="dmsg" style="margin-top:10px"></p>
+    <p class="sub" id="dmsg" style="margin-top:10px" role="status" aria-live="polite"></p>
+    <button class="btn ghost sm" id="restoreHidden" style="margin-top:10px">Restore hidden items</button>
   </div>
 
   <div class="card">

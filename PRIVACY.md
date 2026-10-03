@@ -1,9 +1,9 @@
 # Coursedeck privacy
 
 Source code: https://github.com/CyberWizardYT9/coursedeck  
-Last updated: 2026-08-21
+Last updated: 2026-10-03
 
-Short version: your data never leaves your computer, because there is nowhere for it to go.
+Your coursework is cached on your computer. Coursedeck communicates with your school's Canvas to read your work and save reminders you create. There is no Coursedeck server or analytics.
 
 ## What Coursedeck reads
 
@@ -25,11 +25,11 @@ One thing: to-do items you create yourself are saved to **your own Canvas planne
 
 ## Where it's stored
 
-In `chrome.storage.local` — your browser's own storage, on your own machine. Specifically: cached Canvas data, your per-class settings, manual to-dos, and which items you've ticked off.
+In `chrome.storage.local` — your browser's own storage, on your own machine. Specifically: cached Canvas data, your per-class settings, appearance preferences, manual to-dos, and which items you've ticked off. If you switch schools, local reminders and class preferences are retained separately for each school so you can return to them.
 
 ## What is sent anywhere
 
-Nothing. There is no Coursedeck account, server, database or analytics. The only network requests the extension makes are to your school's Canvas domain.
+The extension sends API requests to your school's Canvas domain using your existing browser session. Personal reminders you create are sent to your own Canvas planner when supported; repeating reminders stay local. There is no Coursedeck account, server, database or analytics, and no coursework is sent to a Coursedeck service.
 
 ## Permissions, and why
 

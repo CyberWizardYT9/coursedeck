@@ -36,15 +36,40 @@ chrome.alarms.onAlarm.addListener(async (a) => {
 /* ------------------------------------------------------------------ sync */
 
 let syncing = null;
+let noteChanges = new Map();
+let cacheQueue = Promise.resolve();
+
+/* Every cache write reads the latest state, including simultaneous reminders. */
+function mutateCache(host, change) {
+  const job = cacheQueue.then(async () => {
+    const current = await getState();
+    if (current.host !== host) return;
+    const patch = change(current);
+    if (patch) await setState(patch);
+  });
+  cacheQueue = job.catch(() => {});
+  return job;
+}
 
 export async function sync(force) {
-  if (syncing && !force) return syncing;
+  if (syncing) {
+    const pending = syncing;
+    try {
+      const data = await pending;
+      if ((await getState()).host !== data.host) return sync();
+      return data;
+    } catch (error) {
+      throw error;
+    }
+  }
+  noteChanges = new Map();
   syncing = (async () => {
     const s = await getState();
     if (!s.host) throw new Error("No Canvas host configured yet.");
     const startedAt = Date.now();
     try {
       const data = await fullSync(s.host, {
+        previous: s.cache,
         /* Written to storage rather than messaged, so a dashboard opened
            part-way through a sync still sees where it has got to. */
         onProgress: p => {
@@ -56,23 +81,29 @@ export async function sync(force) {
       await chrome.storage.local.set({
         syncProgress: { done: 1, total: 1, pct: 100, label: "Done", startedAt, at: Date.now(), running: false }
       }).catch(() => {});
-      await setState({ cache: data, lastError: null });
+      await mutateCache(s.host, () => {
+        const merged = new Map(data.items.map(item => [item.uid, item]));
+        for (const [uid, item] of noteChanges) {
+          if (item) merged.set(uid, item); else merged.delete(uid);
+        }
+        return { cache: { ...data, items: [...merged.values()] }, lastError: null };
+      });
       await refreshBadge();
       return data;
     } catch (err) {
       await chrome.storage.local.set({
         syncProgress: { pct: 0, label: "Failed", startedAt, at: Date.now(), running: false }
       }).catch(() => {});
-      await setState({
+      await mutateCache(s.host, () => ({
         lastError: { message: String(err && err.message || err), at: new Date().toISOString(), code: err && err.code }
-      });
+      }));
       await refreshBadge();
       throw err;
-    } finally {
-      syncing = null;
     }
   })();
-  return syncing;
+  const active = syncing;
+  try { return await active; }
+  finally { if (syncing === active) syncing = null; }
 }
 
 /* Assemble the merged stream the UI and badge both read. */
@@ -102,7 +133,7 @@ export async function stream() {
   if (!s.settings.showActivities) raw = raw.filter(i => !activityIds.has(String(i.courseId)));
 
   const items = buildStream(raw, s.courseCfg, {
-    now, hiddenCourses: hidden, dismissed: s.dismissed, doneLocal: s.doneLocal
+    now, hiddenCourses: hidden, dismissed: s.dismissed, doneLocal: s.doneLocal, keptActive: s.keptActive, settings: s.settings
   });
   /* IMPORTANT: everything returned here crosses chrome.runtime.sendMessage,
      which serialises via JSON. A Set arrives on the other side as {} and blows
@@ -182,16 +213,16 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
               });
               /* Splice it into the cache directly. A full re-sync here is what
                  made adding a reminder feel like it had hung. */
-              const cur = await getState();
-              if (cur.cache && Array.isArray(cur.cache.items)) {
+              if (!note?.id) throw new Error("Canvas did not confirm the reminder.");
+              await mutateCache(s.host, cur => {
+                if (!cur.cache || !Array.isArray(cur.cache.items)) return;
                 const course = (cur.cache.courses || []).find(c => String(c.id) === String(msg.courseId));
-                await setState({ cache: { ...cur.cache, items: [
-                  ...cur.cache.items,
-                  fromPlannerNote({ id: note.id, title: msg.title, details: msg.details || "",
+                const item = fromPlannerNote({ id: note.id, title: msg.title, details: msg.details || "",
                     todo_date: msg.due, workflow_state: "active", course_id: msg.courseId || null },
-                    course ? { id: course.id, name: course.name, short: course.short } : null)
-                ] } });
-              }
+                    course ? { id: course.id, name: course.name, short: course.short } : null);
+                if (syncing) noteChanges.set(item.uid, item);
+                return { cache: { ...cur.cache, items: [...cur.cache.items.filter(i => i.uid !== item.uid), item] } };
+              });
               await refreshBadge();
               reply({ ok: true, synced: true, id: note.id });
               return;
@@ -235,10 +266,11 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
           }
           /* Drop it from the cache instead of re-running a 40-second full sync.
              That delay was why deleting looked like it did nothing at all. */
-          if (s.cache && Array.isArray(s.cache.items)) {
+          await mutateCache(s.host, current => {
             const uid = "n:" + msg.canvasId;
-            await setState({ cache: { ...s.cache, items: s.cache.items.filter(i => i.uid !== uid) } });
-          }
+            if (syncing) noteChanges.set(uid, null);
+            if (current.cache && Array.isArray(current.cache.items)) return { cache: { ...current.cache, items: current.cache.items.filter(i => i.uid !== uid) } };
+          });
           await refreshBadge();
           reply({ ok: true });
           break;

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Coursedeck",
-  "version": "2.4.0",
-  "description": "One clean dashboard for everything in your Canvas courses - assignments, events, clubs, grades and your own to-dos.",
+  "name": "Coursedeck — Canvas Student Planner",
+  "version": "2.6.0",
+  "description": "A simple Canvas student planner for assignments, homework, grades and reminders. See what's due and keep old work out of the way.",
   "minimum_chrome_version": "116",
   "permissions": [
     "storage",

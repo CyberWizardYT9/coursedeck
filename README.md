@@ -1,8 +1,10 @@
 # Coursedeck
 
-One clean dashboard for everything in your Canvas courses — assignments, calendar events, clubs, grades and your own to-dos, in one place, sorted by what actually matters next.
+A simple Canvas student planner. See assignments, homework, grades, calendar events and reminders in one place.
 
-Works at **any school that uses Canvas**. No account, no server, no API token.
+Connect your school's Canvas using your existing browser sign-in. No separate CourseDeck account or API token is needed. School access policies and course content can affect what is available.
+
+Version 2.6 keeps old reminders and uncertain test statuses out of your active list, with searchable history and adjustable grouping. It includes the redesigned workspace and sync improvements from 2.5. See [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
@@ -48,13 +50,13 @@ Anything it cannot parse falls back to the page's plain text rather than showing
 
 **Grades and returned work.** A tab showing everything a teacher has handed back, newest first — the score, the percentage, any late penalty, and the teacher's comment if they left one. Plus a card per class with your average across returned work and whether your recent scores are trending up or down. It is labelled as *work returned so far*, not your official grade, because Canvas weights categories in ways this cannot see.
 
-**It stops last year shouting at you.** Rolling courses — clubs especially — keep assignments from previous years marked "missing" forever. Anything more than 45 days overdue drops into a collapsed archive and stops counting toward your totals.
+**Less clutter.** Past reminders move to a collapsed group the next day. Assignments more than 14 days overdue move to Older assignments. Everything remains searchable. Choose **Keep in my list** for work you still need to do, or adjust these windows in Settings.
 
 **Everything fits on a screen.** Rows are one line each: tick box, title, class, when, points. Click a row for the description, how to hand it in, and why it's ranked where it is. Groups collapse, and the ones that are reference rather than work start collapsed.
 
-**It knows on-paper work exists.** Anything with an on-paper submission stays "unsubmitted" in Canvas forever. Coursedeck lets you tick it off yourself and remembers.
+**Clearer completion status.** Canvas may not know that you have completed a paper test or work in another tool. Past items with these submission types go to **Check status**, rather than being presented as definitely missing. Tick off completed work yourself; this changes CourseDeck only. Online assignments flagged missing by Canvas retain a **Canvas: missing** label.
 
-**Priority you can argue with.** Each item is scored on how soon it's due, how many points it's worth, your class's late-work policy and how much effort it takes — and it *shows you the reasons* on every row. It's a suggestion, not an instruction. You know things it doesn't.
+**Choose what to do next.** Sort by priority, due date or title. Priority considers deadlines, points, and your class preferences, with the reasons shown in the item details.
 
 **Your own to-dos, synced.** Items you add are written to your Canvas planner, so they show up on your phone, in the Canvas app, and in Coursedeck on any other computer. Repeating items (practice, rehearsals, a weekly club) are stored locally, because Canvas has no repeat feature.
 
@@ -99,7 +101,7 @@ This is the part that makes the ordering good, and it's why the app doesn't ship
 ## Privacy
 
 - Everything is stored in your browser on your own computer.
-- There is no Coursedeck server. Nothing is uploaded, tracked or shared.
+- There is no Coursedeck server or analytics. Reminders you create can be saved to your own Canvas planner.
 - The only site it ever talks to is your school's Canvas.
 - Uninstalling deletes everything. **Settings → Export backup** saves your class settings and to-dos to a file if you're moving computers.
 
@@ -125,7 +127,7 @@ Students at other schools just type their own Canvas address at setup. If their 
 
 **Sync works but a course is missing** — check the Classes tab; it may be hidden, or flagged as a club. Concluded or unpublished courses are skipped on purpose.
 
-**Something old and irrelevant is in my list** — anything over 45 days late is already in the collapsed *From a while ago* group. If a whole course is like that, mark it as a club or tick Hide on the Classes tab.
+**Something old and irrelevant is in my list** — use Settings to adjust automatic grouping. Past reminders and older assignments stay in collapsed, searchable groups. You can also hide an individual item, or hide a whole class on the Classes tab.
 
 **It's slow the first time** — the first sync reads every course, its assignments, the calendar and the module pages. Later syncs are quicker, and it re-syncs by itself every 30 minutes.
 
@@ -144,20 +146,26 @@ coursedeck/
   test/                model tests, agenda + grade tests, structural validation, jsdom UI test
 ```
 
-`src/model.js` deliberately imports nothing, so all the logic worth testing runs in plain node:
+Use Node.js 22 or newer. There are no runtime dependencies; development dependencies support tests and packaging.
 
 ```bash
 cd coursedeck
-echo '{"type":"module"}' > package.json     # node needs this to read ES modules
-npm install jsdom                           # only needed for the UI test
-node test/model.test.mjs                    # 41 tests: priority, buckets, archiving, ICS
-node test/agenda.test.mjs                   # 25 tests: three real agenda layouts, grades
-node test/validate.mjs                      # manifest paths, imports, permissions, message wiring
-node test/ui.test.mjs                       # boots the dashboard in a fake browser, 29 assertions
-rm -rf package.json node_modules            # don't ship these
+npm ci
+npm test
+npm run dev
+# Open http://127.0.0.1:4173/ui/dashboard.html
+npm run package
 ```
 
-Two traps worth knowing about if you extend this:
+The preview injects fictional student data and an in-memory Chrome API adapter. It never contacts Canvas. Preview states are available at `?scenario=dark`, `?scenario=empty`, `?scenario=offline`, and `?scenario=partial`. Reminder changes in the preview reset on reload. It supports the dashboard, popup, settings and setup pages.
+
+Packaging writes `dist/coursedeck-2.6.0.zip` and an unpacked folder beside it. Only extension runtime files, required icons, the license and privacy information are included. Tests, demo data, development packages and promotional assets stay out of the extension. Load the unpacked folder at `chrome://extensions` for a live check.
+
+Automated checks cover the original model and agenda behavior, dashboard interactions, partial Canvas failures, simultaneous reminder writes, school profiles, all-day dates, UTF-8 exports and backup validation. The GitHub workflow runs on Windows and Linux. Before publishing, verify sign-in, Canvas tab fallback, custom-domain permission prompts, planner writes and notifications in a real Chrome profile.
+
+Use `/` to search and `N` to add a reminder when you are not typing in another field. Theme and calendar week-start preferences are in Settings. Completion and hiding offer Undo; Settings can restore hidden items.
+
+Traps worth knowing about if you extend this:
 
 - Canvas's `unsubmitted` state **contains the substring** `submitted`. Match it anchored or you'll silently hide work that's still owed. There's a test for it.
 - Canvas returns UTC. A due date of `2026-08-21T03:59:59Z` is **11:59pm on the 20th** in New York. Convert before you show a date to anyone.

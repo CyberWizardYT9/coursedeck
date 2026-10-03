@@ -3,11 +3,24 @@
 /* NOTE: must be anchored. Canvas's "unsubmitted" contains the substring "submitted". */
 export const DONE_STATES = /^(submitted|graded|pending_review|complete)$/;
 
-/* Anything overdue by more than this is almost certainly last year's work that
-   a rolling course (clubs especially) never cleared out. It goes to an archive
-   group instead of screaming at the top of the list. Real tested case: a
-   Mathletes course still listing 2024-25 rounds 639 days late. */
-export const STALE_DAYS = 45;
+/* An organization preference, never a claim that the work is completed.
+   Older items remain searchable and can be kept active individually. */
+export const STALE_DAYS = 14;
+export const QUIET_BUCKETS = ["review", "past", "pastReminders", "stale", "done"];
+export const isActionable = item => !item.done && !QUIET_BUCKETS.includes(item.bucket);
+
+export function needsCompletionCheck(item) {
+  if (item.source !== "canvas" || !["assignment", "quiz"].includes(item.kind)) return false;
+  const types = item.submissionTypes || [];
+  const tracked = ["online_upload", "online_text_entry", "online_quiz", "online_url", "discussion_topic", "media_recording", "student_annotation"];
+  if (types.some(t => tracked.includes(t))) return false;
+  return types.some(t => ["on_paper", "none", "not_graded", "external_tool"].includes(t)) ||
+    /^(on paper|nothing to submit|external tool)/.test(item.submitLabel || "");
+}
+
+export function archiveDays(value, fallback) {
+  return [0, 3, 7, 14, 30, 45, -1].includes(value) ? value : fallback;
+}
 
 export const LATE_POLICY = {
   strict:  { label: "No late work accepted", weight: 260 },
@@ -22,7 +35,25 @@ export const PALETTE = [
 ];
 
 export function colorFor(id, i) {
-  return PALETTE[(Number(id) + (i || 0)) % PALETTE.length];
+  return PALETTE[Math.abs((Number(id) || 0) + (i || 0)) % PALETTE.length];
+}
+
+/* Accept a pasted Canvas URL, but never credentials, ports or arbitrary markup. */
+export function normalizeHost(value) {
+  const input = String(value || "").trim();
+  if (!input || /[<>"'\s]/.test(input)) throw new Error("Enter your school's Canvas web address.");
+  let url;
+  try { url = new URL(/^https?:\/\//i.test(input) ? input : `https://${input}`); }
+  catch { throw new Error("Enter a valid Canvas address, such as school.instructure.com."); }
+  if (!/^https?:$/.test(url.protocol) || url.username || url.password || url.port ||
+      !/^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/i.test(url.hostname)) {
+    throw new Error("Enter your school's Canvas domain, without a username or port.");
+  }
+  return url.hostname.toLowerCase();
+}
+
+export function shiftMonth(date, delta) {
+  return new Date(date.getFullYear(), date.getMonth() + delta, 1);
 }
 
 /* ---------------------------------------------------------------- helpers */
@@ -99,7 +130,7 @@ export function hoursUntil(iso, now) {
 export function fromAssignment(a, course) {
   const sub = a.submission || {};
   const state = sub.workflow_state || null;
-  const done = DONE_STATES.test(state || "");
+  const done = !!sub.excused || (!sub.redo_request && (DONE_STATES.test(state || "") || !!sub.submitted_at));
   return {
     uid: `a:${a.id}`,
     kind: a.is_quiz_assignment || (a.submission_types || []).includes("online_quiz") ? "quiz" : "assignment",
@@ -118,6 +149,8 @@ export function fromAssignment(a, course) {
     description: plainText(a.description).slice(0, 1200),
     state,
     done,
+    excused: !!sub.excused,
+    submittedAt: sub.submitted_at || null,
     missing: !!sub.missing,
     late: !!sub.late,
     score: typeof sub.score === "number" ? sub.score : null,
@@ -138,6 +171,7 @@ export function fromEvent(e, ctx) {
     due: e.start_at || null,
     endAt: e.end_at || null,
     allDay: !!e.all_day,
+    allDayDate: e.all_day_date || null,
     location: e.location_name || null,
     points: null,
     url: e.html_url || null,
@@ -194,6 +228,7 @@ export function expandRepeats(ev, fromISO, toISO) {
   if (!ev.repeat || !ev.due) return [ev];
   const start = new Date(ev.due);
   const from = new Date(fromISO), to = new Date(toISO);
+  if ([start, from, to].some(d => isNaN(d))) return [];
   const stepDays = ev.repeat === "daily" ? 1 : ev.repeat === "weekly" ? 7 : ev.repeat === "biweekly" ? 14 : 0;
   if (!stepDays) return [ev];
   const out = [];
@@ -218,11 +253,8 @@ export function priority(item, courseCfg, now) {
 
   if (item.done) return { score: -1, reasons: ["done"] };
 
-  const overdueDays = item.due ? -daysUntil(item.due, now) : 0;
-  if (overdueDays > STALE_DAYS) {
-    // months late — keep it findable, stop it shouting
-    return { score: -0.5, reasons: [`${overdueDays} days late — probably last year's`] };
-  }
+  const bucket = item.bucket || bucketOf(item, now);
+  if (QUIET_BUCKETS.includes(bucket)) return { score: -0.5, reasons: [] };
   if (item.missing || (item.due && hoursUntil(item.due, now) < 0 && item.kind !== "event")) {
     score += 1000; reasons.push("overdue");
   }
@@ -261,11 +293,20 @@ export function priority(item, courseCfg, now) {
   return { score: Math.round(score), reasons };
 }
 
-export function bucketOf(item, now) {
+export function bucketOf(item, now, settings = {}) {
   if (item.done) return "done";
-  const d = daysUntil(item.due, now);
+  if (item.kind === "event" && item.due) {
+    const end = item.endAt ? new Date(item.endAt) : new Date(item.due);
+    if (item.allDay ? daysUntil(item.allDayDate ? `${item.allDayDate}T12:00:00` : item.due, now) < 0
+      : end < (now ? new Date(now) : new Date())) return "past";
+  }
+  const d = daysUntil(item.allDay && item.allDayDate ? `${item.allDayDate}T12:00:00` : item.due, now);
   if (d === null) return "undated";
-  if (d < -STALE_DAYS) return "stale";
+  const reminderDays = archiveDays(settings.reminderArchiveDays, 0);
+  const assignmentDays = archiveDays(settings.assignmentArchiveDays, STALE_DAYS);
+  if (item.kind === "note" && !item.keepActive && reminderDays !== -1 && d < -reminderDays) return "pastReminders";
+  if (item.kind !== "note" && !item.keepActive && assignmentDays !== -1 && d < -assignmentDays) return "stale";
+  if (d < 0 && !item.keepActive && needsCompletionCheck(item)) return "review";
   if (d < 0) return "overdue";
   if (d === 0) return "today";
   if (d === 1) return "tomorrow";
@@ -273,10 +314,10 @@ export function bucketOf(item, now) {
   return "later";
 }
 
-export const BUCKET_ORDER = ["overdue", "today", "tomorrow", "week", "later", "undated", "stale", "done"];
+export const BUCKET_ORDER = ["overdue", "today", "tomorrow", "week", "later", "undated", "review", "past", "pastReminders", "stale", "done"];
 export const BUCKET_LABEL = {
   overdue: "Overdue", today: "Today", tomorrow: "Tomorrow", week: "This week",
-  later: "Later", undated: "No due date", stale: "From a while ago", done: "Done"
+  later: "Later", undated: "No due date", review: "Check status", past: "Past events", pastReminders: "Past reminders", stale: "Older assignments", done: "Done"
 };
 
 /* ------------------------------------------------------------------ merge */
@@ -298,6 +339,7 @@ export function buildStream(raw, cfgByCourse, opts) {
   const hidden = new Set((opts && opts.hiddenCourses) || []);
   const dismissed = new Set((opts && opts.dismissed) || []);
   const done = new Set((opts && opts.doneLocal) || []);
+  const kept = new Set((opts && opts.keptActive) || []);
 
   let items = dedupe(raw).filter(it => {
     if (it.courseId && hidden.has(String(it.courseId))) return false;
@@ -307,9 +349,15 @@ export function buildStream(raw, cfgByCourse, opts) {
 
   items = items.map(it => {
     const cfg = cfgByCourse[String(it.courseId)] || {};
-    const isDone = it.done || done.has(it.uid);
-    const p = priority({ ...it, done: isDone }, cfg, now);
-    return { ...it, done: isDone, priority: p.score, reasons: p.reasons, bucket: bucketOf({ ...it, done: isDone }, now) };
+    const isDone = !!(it.done || it.excused || done.has(it.uid));
+    const item = { ...it, done: isDone, canvasComplete: it.source === "canvas" && !!(it.done || it.excused), keepActive: kept.has(it.uid) };
+    item.bucket = bucketOf(item, now, opts?.settings);
+    // Canvas may flag a paper test or external-tool task as missing before
+    // its teacher records completion. Preserve that fact for the detail view.
+    item.canvasMissing = !!(it.canvasMissing ?? it.missing);
+    item.missing = !isDone && item.canvasMissing && !needsCompletionCheck(item);
+    const p = priority(item, cfg, now);
+    return { ...item, priority: p.score, reasons: p.reasons };
   });
 
   items.sort((a, b) => {
@@ -332,12 +380,14 @@ function icsStamp(iso) {
   return d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
 }
 function fold(line) {
-  if (line.length <= 73) return line;
-  const parts = [];
-  let s = line;
-  parts.push(s.slice(0, 73));
-  s = s.slice(73);
-  while (s.length) { parts.push(" " + s.slice(0, 72)); s = s.slice(72); }
+  const parts = [], encoder = new TextEncoder();
+  let part = "", size = 0;
+  for (const char of line) {
+    const bytes = encoder.encode(char).length;
+    if (size + bytes > 75) { parts.push(part); part = " "; size = 1; }
+    part += char; size += bytes;
+  }
+  parts.push(part);
   return parts.join("\r\n");
 }
 
@@ -348,14 +398,22 @@ export function toICS(items, calName) {
   ];
   const stamp = icsStamp(new Date().toISOString());
   for (const it of items) {
-    if (!it.due) continue;
+    if (!it.due || isNaN(new Date(it.due))) continue;
     const start = icsStamp(it.due);
     const end = icsStamp(it.endAt || new Date(new Date(it.due).getTime() + 30 * 60000).toISOString());
     out.push("BEGIN:VEVENT");
     out.push(`UID:${icsEscape(it.uid)}@coursedeck`);
     out.push(`DTSTAMP:${stamp}`);
-    out.push(`DTSTART:${start}`);
-    out.push(`DTEND:${end}`);
+    if (it.allDay) {
+      const date = it.allDayDate || dayKey(it.due);
+      const next = new Date(`${date}T12:00:00Z`);
+      next.setUTCDate(next.getUTCDate() + 1);
+      out.push(`DTSTART;VALUE=DATE:${date.replace(/-/g, "")}`);
+      out.push(`DTEND;VALUE=DATE:${next.toISOString().slice(0, 10).replace(/-/g, "")}`);
+    } else {
+      out.push(`DTSTART:${start}`);
+      out.push(`DTEND:${end}`);
+    }
     out.push(fold(`SUMMARY:${icsEscape((it.courseShort ? it.courseShort + " — " : "") + it.title)}`));
     const desc = [it.points ? `${it.points} points` : null, it.submitLabel, it.url].filter(Boolean).join(" · ");
     if (desc) out.push(fold(`DESCRIPTION:${icsEscape(desc)}`));
@@ -373,7 +431,8 @@ export function counts(items, now) {
   const c = { overdue: 0, today: 0, tomorrow: 0, week: 0, open: 0, stale: 0 };
   for (const it of items) {
     if (it.done) continue;
-    const b = bucketOf(it, now);
+    const b = it.bucket || bucketOf(it, now);
+    if (["past", "pastReminders", "review"].includes(b)) continue;
     if (b === "stale") { c.stale++; continue; }   // archived work is not "open"
     c.open++;
     if (c[b] !== undefined) c[b]++;
@@ -415,6 +474,7 @@ export function resolveAgendaDate(month, day, now) {
   let best = null, bestGap = Infinity;
   for (const y of [n.getFullYear() - 1, n.getFullYear(), n.getFullYear() + 1]) {
     const d = new Date(y, month - 1, day);
+    if (d.getMonth() !== month - 1 || d.getDate() !== day) continue;
     const gap = Math.abs(d - n);
     if (gap < bestGap) { bestGap = gap; best = d; }
   }
@@ -482,7 +542,9 @@ export function parseAgenda(text, now) {
       work = tail.join("\n").trim();
     }
 
-    const date = resolveAgendaDate(Number(m[1]), Number(m[2]), now);
+    const year = m[3] ? (m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3])) : null;
+    const date = year ? new Date(year, Number(m[1]) - 1, Number(m[2])) : resolveAgendaDate(Number(m[1]), Number(m[2]), now);
+    if (!date || date.getMonth() !== Number(m[1]) - 1 || date.getDate() !== Number(m[2])) continue;
     days.push({
       month: Number(m[1]),
       day: Number(m[2]),
