@@ -133,7 +133,7 @@ export async function stream() {
   if (!s.settings.showActivities) raw = raw.filter(i => !activityIds.has(String(i.courseId)));
 
   const items = buildStream(raw, s.courseCfg, {
-    now, hiddenCourses: hidden, dismissed: s.dismissed, doneLocal: s.doneLocal
+    now, hiddenCourses: hidden, dismissed: s.dismissed, doneLocal: s.doneLocal, keptActive: s.keptActive, settings: s.settings
   });
   /* IMPORTANT: everything returned here crosses chrome.runtime.sendMessage,
      which serialises via JSON. A Set arrives on the other side as {} and blows

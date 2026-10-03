@@ -2,14 +2,29 @@
 import { makeFixture, fixtureStream } from './fixture.js';
 let state = makeFixture();
 const scenario = new URLSearchParams(location.search).get('scenario');
+// Deterministic marketing/test captures of the same UI, after its final layout.
+if (new URLSearchParams(location.search).has('capture')) {
+  const style = document.createElement('style');
+  style.textContent = '* { animation: none !important; transition: none !important; scroll-behavior: auto !important; }';
+  document.head.append(style);
+}
 if (scenario === 'empty') { state.cache.items = []; state.cache.grades = []; state.cache.agenda = {}; }
 if (scenario === 'offline') state.lastError = { message: 'Network unavailable' };
 if (scenario === 'partial') state.cache.warnings = [{ section: 'assignments', courseId: 101, message: 'Biology: showing saved assignments because Canvas could not be reached.' }];
 if (scenario === 'dark') state.settings.theme = 'dark';
+if (scenario === 'clutter') {
+  const date = days => new Date(Date.now() + days * 864e5).toISOString();
+  state.cache.items.push(
+    { uid: 'a:paper', title: 'Calculus test · taken in class', kind: 'quiz', source: 'canvas', courseId: 103, courseShort: 'Calculus', due: date(-2), submissionTypes: ['on_paper'], missing: true, done: false },
+    { uid: 'a:old', title: 'August reading notes', kind: 'assignment', source: 'canvas', courseId: 102, courseShort: 'Literature', due: date(-40), submissionTypes: ['online_upload'], missing: true, done: false },
+    { uid: 'n:meeting', title: 'Chess club meeting', kind: 'note', source: 'manual', courseShort: 'Personal', due: date(-1), done: false },
+    ...Array.from({ length: 60 }, (_, i) => ({ uid: `n:old-${i}`, title: `Past reminder ${i + 1}`, kind: 'note', source: 'manual', courseShort: 'Personal', due: date(-2 - i), done: false }))
+  );
+}
 const listeners = new Set();
 window.chrome = {
   runtime: {
-    getURL: p => '/' + p, getManifest: () => ({ version: '2.5.0' }), openOptionsPage: () => { location.href = '/ui/settings.html'; },
+    getURL: p => '/' + p, getManifest: () => ({ version: '2.6.0' }), openOptionsPage: () => { location.href = '/ui/settings.html'; },
     sendMessage: (m, cb) => {
       const work = async () => {
         if (m.type === 'stream') return fixtureStream(state);

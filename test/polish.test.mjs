@@ -23,6 +23,51 @@ async function boot(t, page = 'dashboard', configure = () => {}) {
   const input = (selector, value, type = 'input') => { const el = d.querySelector(selector); el.value = value; el.dispatchEvent(new w.Event(type, { bubbles: true })); };
   return { w, d, state: () => state, input, messages, errors };
 }
+
+test('old reminders and unconfirmed paper tests remain collapsed without overdue badges', async t => {
+  const { d } = await boot(t, 'dashboard', s => {
+    const due = new Date(Date.now() - 2 * 864e5).toISOString();
+    s.cache.items.push({ uid: 'a:paper', title: 'Paper test', source: 'canvas', kind: 'quiz', submissionTypes: ['on_paper'], missing: true, due });
+    s.cache.items.push(...Array.from({ length: 100 }, (_, i) => ({ uid: 'n:old' + i, title: 'Old reminder', kind: 'note', source: 'manual', due })));
+  });
+  assert.ok(d.querySelector('[data-g="review"]').classList.contains('closed'));
+  assert.ok(d.querySelector('[data-g="pastReminders"]').classList.contains('closed'));
+  assert.equal(d.querySelector('[data-uid="a:paper"] .badge.warn'), null);
+  assert.match(d.querySelector('[data-f="late"]').textContent, /^1/);
+  assert.match(d.querySelector('#resultCount').textContent, /^12 /);
+});
+test('search finds old work and Keep in my list restores it with undo', async t => {
+  const { d, input, state } = await boot(t, 'dashboard', s => {
+    s.cache.items.push({ uid: 'n:old', title: 'Call my tutor', source: 'manual', kind: 'note', due: new Date(Date.now() - 50 * 864e5).toISOString() });
+  });
+  input('#search', 'Call my tutor');
+  assert.ok(!d.querySelector('[data-g="pastReminders"]').classList.contains('closed'));
+  d.querySelector('[data-uid="n:old"] .act-keep').click(); await tick();
+  assert.ok(state().keptActive.includes('n:old'));
+  assert.ok(d.querySelector('[data-g="overdue"] [data-uid="n:old"]'));
+  d.querySelector('.toast button').click(); await tick();
+  assert.ok(!state().keptActive.includes('n:old'));
+  assert.ok(d.querySelector('[data-g="pastReminders"] [data-uid="n:old"]'));
+});
+test('quiet items stay out of popup and expired club announcements stay out of summaries', async t => {
+  const configure = s => {
+    s.cache.items.push({ uid: 'n:old', title: 'Expired meeting', kind: 'note', source: 'manual', due: new Date(Date.now() - 864e5).toISOString() });
+    s.cache.announcements.push({ courseId: 106, title: 'August club news', posted: new Date(Date.now() - 60 * 864e5).toISOString() });
+  };
+  const popup = await boot(t, 'popup', configure);
+  assert.ok(!popup.d.querySelector('#body').textContent.includes('Expired meeting'));
+  const dashboard = await boot(t, 'dashboard', configure);
+  assert.ok(!dashboard.d.querySelector('#clubs').textContent.includes('August club news'));
+});
+test('organization preferences save and survive a settings repaint', async t => {
+  const { d, input, state } = await boot(t, 'settings');
+  assert.equal(d.querySelector('#assignmentArchiveDays').value, '14');
+  assert.equal(d.querySelector('#reminderArchiveDays').value, '0');
+  input('#assignmentArchiveDays', '30', 'change'); await tick();
+  input('#reminderArchiveDays', '-1', 'change'); await tick();
+  assert.equal(state().settings.assignmentArchiveDays, 30);
+  assert.equal(state().settings.reminderArchiveDays, -1);
+});
 test('search, class and time filters compose, and clear resets them all', async t => {
   const { d, input } = await boot(t);
   input('#search', 'integration'); assert.equal(d.querySelectorAll('#list .item').length, 2);

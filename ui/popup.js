@@ -1,4 +1,4 @@
-import { daysUntil, colorFor } from "../src/model.js";
+import { daysUntil, colorFor, isActionable } from "../src/model.js";
 import { sendMessage, applyTheme, safeHref, drawIcons } from "./shared.js";
 
 const $ = s => document.querySelector(s);
@@ -40,7 +40,7 @@ async function paint() {
   if (!notice && r.state.cache?.warnings?.length) notice = '<div class="popup-notice">Some information could not be refreshed. Open your workspace for details.</div>';
 
   // hide the archive bucket here too — a phone-sized list has no room for last year
-  const open = r.items.filter(i => !i.done && !["stale", "past"].includes(i.bucket));
+  const open = r.items.filter(isActionable);
   const soon = open.filter(i => i.due && daysUntil(i.due) <= 7).slice(0, 8);
   const overdue = open.filter(i => i.bucket === "overdue").length;
   const today = open.filter(i => i.bucket === "today").length;

@@ -1,0 +1,23 @@
+Coursedeck is a simple Canvas student planner for Chrome. Bring assignments, homework, due dates, grades and personal reminders from your Canvas courses into one dashboard.
+
+SEE WHAT’S DUE
+Check today’s assignments or the week ahead. Search by title or class, filter your list, and sort by priority, due date or name. Open any assignment in Canvas when you are ready to work.
+
+KEEP YOUR LIST CLEAR
+Past reminders and older assignments move into collapsed, searchable groups. Paper tests and external-tool work with unconfirmed completion go to Check status. Mark work finished yourself, keep an item in your active list, or adjust the grouping in Settings. These choices do not change your submissions or grades in Canvas.
+
+PLAN YOUR SCHOOL WEEK
+See homework posted on supported weekly Canvas module pages. View assignments, personal reminders and school events on a calendar. Add a to-do to your Canvas planner or keep repeating reminders on your computer. Export upcoming work as a calendar file for Google Calendar, Apple Calendar or Outlook.
+
+CHECK RETURNED WORK
+See scores and available teacher feedback together, with a summary for each class. Summaries reflect the returned work available to Coursedeck; check Canvas for your official course grade.
+
+SIMPLE TO CONNECT
+Sign in to your school’s Canvas in Chrome, then enter your Canvas address in Coursedeck. No separate Coursedeck account or API token is required. School access policies and the way teachers organize their courses can affect what appears.
+
+YOUR DATA STAYS UNDER YOUR CONTROL
+Coursedeck connects directly to your school’s Canvas. Dashboard data and preferences are stored locally in your browser. To-dos you choose to save to Canvas are sent to your school. There is no Coursedeck server, advertising or analytics.
+
+Free and open source. Includes light and dark themes, optional deadline notifications, keyboard controls and a compact toolbar popup.
+
+Coursedeck is an independent project and is not affiliated with or endorsed by Instructure. Canvas is a trademark of Instructure, Inc.

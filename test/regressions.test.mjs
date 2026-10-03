@@ -60,8 +60,8 @@ test('backup restore invalidates old school cache', async () => {
   assert.equal(patch.cache, null); assert.equal(patch.lastError, null);
 });
 test('switching schools keeps local reminders separate and restores them on return', async () => {
-  let state = { host: 'one.instructure.com', localEvents: [{ id: 'one', title: 'Personal reminder' }], courseCfg: { 1: { hidden: true } }, doneLocal: ['a:1'], dismissed: [] };
+  let state = { host: 'one.instructure.com', localEvents: [{ id: 'one', title: 'Personal reminder' }], courseCfg: { 1: { hidden: true } }, doneLocal: ['a:1'], keptActive: ['a:2'], dismissed: [] };
   globalThis.chrome = { storage: { local: { get: async () => structuredClone(state), set: async patch => { state = { ...state, ...patch }; } } } };
-  await switchSchool('two.instructure.com'); assert.equal(state.localEvents.length, 0);
-  await switchSchool('one.instructure.com'); assert.equal(state.localEvents[0].id, 'one'); assert.deepEqual(state.doneLocal, ['a:1']);
+  await switchSchool('two.instructure.com'); assert.equal(state.localEvents.length, 0); assert.deepEqual(state.keptActive, []);
+  await switchSchool('one.instructure.com'); assert.equal(state.localEvents[0].id, 'one'); assert.deepEqual(state.doneLocal, ['a:1']); assert.deepEqual(state.keptActive, ['a:2']);
 });

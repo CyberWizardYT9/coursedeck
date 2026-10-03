@@ -11,6 +11,8 @@ async function paintSettings() {
   applyTheme(S.settings);
   $("#theme").value = S.settings.theme || "system";
   $("#weekStart").value = String(S.settings.weekStart || 0);
+  $("#assignmentArchiveDays").value = String(S.settings.assignmentArchiveDays ?? 14);
+  $("#reminderArchiveDays").value = String(S.settings.reminderArchiveDays ?? 0);
   $("#hostline").textContent = S.host ? `Connected to ${S.host}` : "Not connected to a school yet";
   $("#host").value = S.host || "";
   $("#syncMinutes").value = String(S.settings.syncMinutes);
@@ -31,6 +33,8 @@ async function saveSettings(patch) {
 
 $("#theme").onchange = e => saveSettings({ theme: e.target.value });
 $("#weekStart").onchange = e => saveSettings({ weekStart: Number(e.target.value) });
+$("#assignmentArchiveDays").onchange = e => saveSettings({ assignmentArchiveDays: Number(e.target.value) });
+$("#reminderArchiveDays").onchange = e => saveSettings({ reminderArchiveDays: Number(e.target.value) });
 $("#restoreHidden").onclick = async () => { await setState({ dismissed: [] }); await send({ type: "badge" }); $("#dmsg").textContent = "Hidden items restored. Hidden classes can be restored from the Classes tab."; };
 
 $("#syncMinutes").onchange = e => saveSettings({ syncMinutes: Number(e.target.value) });

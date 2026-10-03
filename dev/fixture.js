@@ -50,5 +50,5 @@ export function makeFixture() {
 export function fixtureStream(state) {
   const activityIds = state.cache.courses.filter(c => state.courseCfg[c.id]?.activity ?? c.activity).map(c => String(c.id));
   const raw = state.cache.items.filter(i => state.settings.showActivities || !activityIds.includes(String(i.courseId)));
-  return { ok: true, state, activityIds, items: buildStream(raw, state.courseCfg, { doneLocal: state.doneLocal, dismissed: state.dismissed, hiddenCourses: Object.keys(state.courseCfg).filter(id => state.courseCfg[id].hidden) }) };
+  return { ok: true, state, activityIds, items: buildStream(raw, state.courseCfg, { doneLocal: state.doneLocal, dismissed: state.dismissed, keptActive: state.keptActive, settings: state.settings, hiddenCourses: Object.keys(state.courseCfg).filter(id => state.courseCfg[id].hidden) }) };
 }

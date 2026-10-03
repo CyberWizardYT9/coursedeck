@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.6.0
+
+- Dated reminders move to a collapsed Past reminders group the day after their date. Assignments more than 14 days overdue move to Older assignments. Both remain searchable; nothing is deleted or changed in Canvas.
+- Past paper tests, no-submission assignments, and external-tool work go to Check status when completion is unconfirmed. They do not inflate the overdue badge or suggested next assignment. Canvas's original flag remains available in the details.
+- Submitted and excused work no longer displays a stale missing flag. Online assignments explicitly marked missing by Canvas retain a source-labeled badge.
+- Keep any item in the active list with one action and undo it if needed. Change the archive windows, including Never, in Settings. Preferences and kept items survive backups and school switching.
+- Show only the last two weeks of club announcements and sort them newest first.
+- Refresh store copy and promotional materials around simple, concrete student workflows.
+
 ## 2.5.0
 
 ### A clearer workspace

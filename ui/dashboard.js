@@ -1,9 +1,9 @@
 import {
   LATE_POLICY, colorFor, toICS, counts, daysUntil,
   parseAgenda, pickAgendaPage, agendaCoversToday, bucketOf,
-  gradeStats, gradeLetter, gradeTone, shiftMonth, dayKey
+  gradeStats, gradeLetter, gradeTone, shiftMonth, dayKey, isActionable, needsCompletionCheck
 } from "../src/model.js";
-import { getState, setState, setCourseCfg, toggleDone, dismiss, restoreDismissed, removeLocalEvent } from "../src/store.js";
+import { getState, setState, setCourseCfg, toggleDone, dismiss, restoreDismissed, removeLocalEvent, keepActive } from "../src/store.js";
 import { sendMessage, safeHref, applyTheme, downloadFile, setupDialogs, drawIcons } from "./shared.js";
 
 const $ = s => document.querySelector(s);
@@ -19,11 +19,13 @@ const GROUPS = [
   ["week", "Later this week", "var(--green)"],
   ["later", "Coming up", "var(--mute)"],
   ["undated", "No date given", "var(--mute)"],
+  ["review", "Check status", "var(--mute)"],
   ["past", "Past events", "var(--mute)"],
-  ["stale", "From a while ago", "var(--mute)"],
+  ["pastReminders", "Past reminders", "var(--mute)"],
+  ["stale", "Older assignments", "var(--mute)"],
   ["done", "Finished", "var(--mute)"]
 ];
-const CLOSED_BY_DEFAULT = new Set(["later", "undated", "past", "stale", "done"]);
+const CLOSED_BY_DEFAULT = new Set(["later", "undated", "review", "past", "pastReminders", "stale", "done"]);
 const dialogs = setupDialogs();
 let SEARCH = "", COURSE_FILTER = "all", SORT = "priority", UNDATED = false;
 
@@ -171,7 +173,7 @@ function whenLabel(it) {
   if (it.allDay) return { t: daysUntil(it.allDayDate ? `${it.allDayDate}T12:00:00` : it.due) === 0 ? "All day" : new Date(it.allDayDate ? `${it.allDayDate}T12:00:00` : it.due).toLocaleDateString([], { month: "short", day: "numeric" }) + " · all day", c: "w-mute" };
   const d = daysUntil(it.due), dt = new Date(it.due);
   const time = dt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-  if (d < -45) return { t: dt.toLocaleDateString([], { month: "short", year: "2-digit" }), c: "w-mute" };
+  if (!isActionable(it)) return { t: dt.toLocaleDateString([], { month: "short", day: "numeric" }), c: "w-mute" };
   if (d < 0) return { t: d === -1 ? "1 day late" : `${Math.abs(d)} days late`, c: "w-red" };
   if (d === 0) return { t: time, c: "w-red" };
   if (d === 1) return { t: `Tomorrow ${time}`, c: "w-amber" };
@@ -203,7 +205,7 @@ function pendingHTML(it) {
 function itemHTML(it) {
   if (it.pending) return pendingHTML(it);
   const w = whenLabel(it);
-  const canvasDone = it.done && it.state && /^(submitted|graded|pending_review|complete)$/.test(it.state);
+  const canvasDone = it.canvasComplete;
   const detail = (it.description || "").trim();
   return `<div class="item b-${it.bucket} ${it.done ? "done" : ""} ${it.bucket === "stale" ? "stale" : ""} ${openItems.has(it.uid) ? "open" : ""}" data-uid="${esc(it.uid)}">
     <div class="ih">
@@ -212,8 +214,9 @@ function itemHTML(it) {
       <div class="imain">
         <button class="item-toggle" aria-expanded="${openItems.has(it.uid)}" aria-label="Details: ${esc(it.title)}"><span class="it">${esc(it.title)}</span></button>
         <span class="pill" style="--course-color:${courseColor(it.courseId)}">${esc(it.courseShort || "—")}</span>
-        ${it.missing ? `<span class="badge warn">missing</span>` : ""}
-        ${canvasDone ? `<span class="badge">handed in</span>` : ""}
+        ${it.missing && isActionable(it) ? `<span class="badge warn">Canvas: missing</span>` : ""}
+        ${canvasDone ? `<span class="badge">${it.excused ? "excused" : it.graded ? "graded" : "handed in"}</span>` : ""}
+        ${it.keepActive && !it.done ? `<span class="badge">kept in list</span>` : ""}
         ${it.local ? `<span class="badge info">${it.repeat ? "Repeating · local" : "Saved locally"}</span>` : ""}
       </div>
       <div class="iside">
@@ -223,10 +226,12 @@ function itemHTML(it) {
       </div>
     </div>
     <div class="detail">
+      ${!it.done && needsCompletionCheck(it) ? `<p class="status-explanation">Canvas has not confirmed completion of this paper or external-tool work.${it.canvasMissing ? " Canvas currently flags it as missing, which may not reflect work completed in class." : ""} If you have finished, tick it off here. This changes your CourseDeck list only.</p>` : ""}
       ${it.reasons && it.reasons.length && !it.done ? `<div class="why">Ranked here because: ${esc(it.reasons.slice(0, 3).join(", "))}</div>` : ""}
       ${it.submitLabel ? `<div class="why">How to hand it in: <b>${esc(it.submitLabel)}</b></div>` : ""}
       ${detail ? `<p>${esc(detail)}</p>` : ""}
       <div class="acts">
+        ${!it.done && it.kind !== "event" ? `<button class="btn alt sm act-keep">${it.keepActive ? "Use automatic grouping" : "Keep in my list"}</button>` : ""}
         ${it.url ? `<a class="btn sm" target="_blank" rel="noopener" href="${esc(safeHref(it.url))}">Open in Canvas ↗</a>` : ""}
         ${it.source === "manual" ? `<button class="btn alt sm act-del">${it.repeat ? "Delete series" : "Delete"}</button>`
                                  : `<button class="btn alt sm act-hide">Hide this</button>`}
@@ -266,7 +271,7 @@ function paintNow() {
     if (FILTER === "tomorrow") return i.bucket === "tomorrow";
     return String(i.courseId) === FILTER;
   });
-  $("#resultCount").textContent = `${shown.filter(i => !i.done && !["stale", "past"].includes(i.bucket)).length} open items`;
+  $("#resultCount").textContent = `${shown.filter(isActionable).length} open items`;
   $("#clearFilters").hidden = !SEARCH && COURSE_FILTER === "all" && FILTER === "all" && !UNDATED;
   if (SORT === "due") shown.sort((a, b) => (a.due || "9999").localeCompare(b.due || "9999"));
   if (SORT === "title") shown.sort((a, b) => a.title.localeCompare(b.title));
@@ -279,12 +284,12 @@ function paintNow() {
     const g = groups[key];
     if (!g || !g.length) continue;
     if (key === "done" && g.length > 30) g.length = 30;
-    const note = key === "stale" ? ` <span class="n">· old work your school never cleared out</span>` : "";
+    const note = ["stale", "pastReminders"].includes(key) ? ` <span class="n">· saved for reference</span>` : key === "review" ? ` <span class="n">· completion unconfirmed</span>` : "";
     const expanded = !!SEARCH || openGroups.has(key);
     html += `<div class="group ${expanded ? "" : "closed"}" data-g="${key}">
       <button class="ghead" aria-expanded="${expanded}"><span class="caret">▾</span><span class="accent" style="background:${col}"></span>
         <span class="group-title">${label}</span><span class="n">${g.length}</span>${note}</button>
-      <div class="glist">${g.map(itemHTML).join("")}</div>
+      <div class="glist">${key === "review" ? '<p class="sub quiet-explainer">These items may have been completed in class or outside Canvas. Tick off anything you finished, or choose “Keep in my list” if it still needs doing.</p>' : ""}${g.map(itemHTML).join("")}</div>
     </div>`;
   }
 
@@ -296,6 +301,15 @@ function paintNow() {
 }
 
 function wireList() {
+  $$("#list .act-keep").forEach(b => b.onclick = async () => {
+    const item = ITEMS.find(i => i.uid === b.closest(".item").dataset.uid);
+    if (!item) return;
+    const active = !item.keepActive;
+    try {
+      await keepActive(item.uid, active); await send({ type: "badge" }); await load();
+      toast(active ? "Kept in your list until you finish it." : "Automatic grouping restored.", { action: { label: "Undo", run: async () => { await keepActive(item.uid, !active); await send({ type: "badge" }); await load(); } } });
+    } catch { toast("Could not save that change. Try again.", { kind: "err" }); }
+  });
   $$("#p-now [data-f]").forEach(b => b.onclick = () => { FILTER = b.dataset.f; paintNow(); });
   $$("[data-course-filter]").forEach(b => b.onclick = () => { COURSE_FILTER = b.dataset.courseFilter; paintNow(); });
   $$(".ghead").forEach(h => h.onclick = () => {
@@ -363,8 +377,8 @@ $("#expandAll").onclick = () => { openGroups = new Set(GROUPS.map(g => g[0])); p
 $("#collapseAll").onclick = () => { openGroups = new Set(); openItems.clear(); paintNow(); };
 
 function paintInsights(active) {
-  const focus = active.find(i => !i.done && !["stale", "past"].includes(i.bucket) && i.kind !== "event");
-  $("#focusCard").innerHTML = focus ? `<section class="focus-card"><p class="eyebrow"><span class="focus-dot"></span>A GOOD PLACE TO START</p><h2>${esc(focus.title)}</h2><div class="focus-course">${esc(focus.courseShort || "Personal")} <span>·</span> ${esc(whenLabel(focus).t)}</div><p class="focus-why">${esc(focus.reasons?.length ? focus.reasons.slice(0, 2).join(" · ") : "One small step toward a lighter day.")}. You decide what comes first.</p><button id="focusOpen">View assignment <span data-icon="arrow"></span></button></section>` : `<section class="focus-card"><p class="eyebrow"><span class="focus-dot"></span>LOOKING GOOD</p><h2>Room to breathe.</h2><p class="focus-why">No open coursework right now. Check your week plans for anything your teachers shared there.</p><button id="focusPlans">View week plans <span data-icon="arrow"></span></button></section>`;
+  const focus = active.find(i => isActionable(i) && i.kind !== "event");
+  $("#focusCard").innerHTML = focus ? `<section class="focus-card"><p class="eyebrow"><span class="focus-dot"></span>A GOOD PLACE TO START</p><h2>${esc(focus.title)}</h2><div class="focus-course">${esc(focus.courseShort || "Personal")} <span>·</span> ${esc(whenLabel(focus).t)}</div><p class="focus-why">${esc(focus.reasons?.length ? focus.reasons.slice(0, 2).join(" · ") : "Based on your upcoming work")}.</p><button id="focusOpen">View assignment <span data-icon="arrow"></span></button></section>` : `<section class="focus-card"><p class="eyebrow"><span class="focus-dot"></span>LOOKING GOOD</p><h2>Room to breathe.</h2><p class="focus-why">No open coursework right now. Check your week plans for anything your teachers shared there.</p><button id="focusPlans">View week plans <span data-icon="arrow"></span></button></section>`;
   if (focus) $("#focusOpen").onclick = () => {
     SEARCH = ""; COURSE_FILTER = "all"; FILTER = "all"; UNDATED = false;
     $("#search").value = ""; $("#undatedOnly").checked = false;
@@ -482,7 +496,7 @@ function paintGrades() {
 
 function classCard(c) {
   const cfg = (STATE.courseCfg || {})[String(c.id)] || {};
-  const open = ITEMS.filter(i => String(i.courseId) === String(c.id) && !i.done && i.bucket !== "stale");
+  const open = ITEMS.filter(i => String(i.courseId) === String(c.id) && isActionable(i));
   const next = open.filter(i => i.due).sort((a, b) => a.due.localeCompare(b.due))[0];
   const pol = cfg.latePolicy || "none";
   return `<div class="card" data-course="${c.id}">
@@ -523,15 +537,15 @@ function paintClubs() {
   const ann = (cache() && cache().announcements) || [];
   const groups = (cache() && cache().groups) || [];
   let html = cs.map(c => {
-    const recent = ann.filter(a => String(a.courseId) === String(c.id)).slice(0, 3);
-    const work = ITEMS.filter(i => String(i.courseId) === String(c.id) && !i.done && i.bucket !== "stale").length;
+    const recent = ann.filter(a => String(a.courseId) === String(c.id) && a.posted && daysUntil(a.posted) >= -14 && daysUntil(a.posted) <= 0).sort((a, b) => b.posted.localeCompare(a.posted)).slice(0, 3);
+    const work = ITEMS.filter(i => String(i.courseId) === String(c.id) && isActionable(i)).length;
     return `<div class="card" data-course="${c.id}">
       <div style="font-size:14.5px;font-weight:650">${esc(c.name)}</div>
       <div class="sub" style="margin-bottom:9px">${esc(c.term || "activity")}${work ? ` · ${work} open item${work === 1 ? "" : "s"}` : ""}</div>
       ${recent.length ? recent.map(a =>
         `<div style="font-size:13.5px;margin-bottom:9px"><a target="_blank" rel="noopener" href="${esc(a.url)}"><b>${esc(a.title)}</b></a>
          <div class="sub">${new Date(a.posted).toLocaleDateString()} — ${esc((a.text || "").slice(0, 120))}</div></div>`
-      ).join("") : `<div class="sub">Nothing posted in the last week.</div>`}
+      ).join("") : `<div class="sub">No announcements in the last two weeks.</div>`}
       <div class="row" style="margin-top:10px">
         <label class="inline"><input type="checkbox" class="cfg-activity" checked> Treat as a club</label>
         <a class="btn alt sm" style="margin-left:auto" target="_blank" rel="noopener" href="${esc(c.url)}">Open</a>
@@ -753,7 +767,7 @@ async function doSync(quiet) {
 }
 $("#sync").onclick = () => doSync();
 
-const exportable = () => ITEMS.filter(i => !i.done && i.due && !["stale", "past"].includes(i.bucket) && !REMOVED.has(i.uid));
+const exportable = () => ITEMS.filter(i => isActionable(i) && i.due && !REMOVED.has(i.uid));
 $("#ics").onclick = () => {
   const due = exportable();
   $("#icsCount").textContent = due.length
@@ -860,7 +874,7 @@ document.addEventListener("keydown", e => {
 });
 
 function selectPanel(id) {
-  const titles = { "p-now": "Your day, in focus.", "p-cal": "Make room for what’s next.", "p-plans": "The rest of the story.", "p-grades": "See how you’re doing.", "p-classes": "Your classes, your way.", "p-clubs": "Life beyond the classroom.", "p-credits": "Made for students." };
+  const titles = { "p-now": "Your day, in focus.", "p-cal": "Your calendar.", "p-plans": "Your week plans.", "p-grades": "Your returned work.", "p-classes": "Your classes.", "p-clubs": "Clubs & activities.", "p-credits": "Made for students." };
   if (!titles[id]) return;
   $$("nav button").forEach(x => { x.classList.toggle("on", x.dataset.t === id); if (x.dataset.t === id) x.setAttribute("aria-current", "page"); else x.removeAttribute("aria-current"); });
   $$(".panel").forEach(p => p.classList.toggle("on", p.id === id));

@@ -3,11 +3,24 @@
 /* NOTE: must be anchored. Canvas's "unsubmitted" contains the substring "submitted". */
 export const DONE_STATES = /^(submitted|graded|pending_review|complete)$/;
 
-/* Anything overdue by more than this is almost certainly last year's work that
-   a rolling course (clubs especially) never cleared out. It goes to an archive
-   group instead of screaming at the top of the list. Real tested case: a
-   Mathletes course still listing 2024-25 rounds 639 days late. */
-export const STALE_DAYS = 45;
+/* An organization preference, never a claim that the work is completed.
+   Older items remain searchable and can be kept active individually. */
+export const STALE_DAYS = 14;
+export const QUIET_BUCKETS = ["review", "past", "pastReminders", "stale", "done"];
+export const isActionable = item => !item.done && !QUIET_BUCKETS.includes(item.bucket);
+
+export function needsCompletionCheck(item) {
+  if (item.source !== "canvas" || !["assignment", "quiz"].includes(item.kind)) return false;
+  const types = item.submissionTypes || [];
+  const tracked = ["online_upload", "online_text_entry", "online_quiz", "online_url", "discussion_topic", "media_recording", "student_annotation"];
+  if (types.some(t => tracked.includes(t))) return false;
+  return types.some(t => ["on_paper", "none", "not_graded", "external_tool"].includes(t)) ||
+    /^(on paper|nothing to submit|external tool)/.test(item.submitLabel || "");
+}
+
+export function archiveDays(value, fallback) {
+  return [0, 3, 7, 14, 30, 45, -1].includes(value) ? value : fallback;
+}
 
 export const LATE_POLICY = {
   strict:  { label: "No late work accepted", weight: 260 },
@@ -117,7 +130,7 @@ export function hoursUntil(iso, now) {
 export function fromAssignment(a, course) {
   const sub = a.submission || {};
   const state = sub.workflow_state || null;
-  const done = DONE_STATES.test(state || "");
+  const done = !!sub.excused || (!sub.redo_request && (DONE_STATES.test(state || "") || !!sub.submitted_at));
   return {
     uid: `a:${a.id}`,
     kind: a.is_quiz_assignment || (a.submission_types || []).includes("online_quiz") ? "quiz" : "assignment",
@@ -136,6 +149,8 @@ export function fromAssignment(a, course) {
     description: plainText(a.description).slice(0, 1200),
     state,
     done,
+    excused: !!sub.excused,
+    submittedAt: sub.submitted_at || null,
     missing: !!sub.missing,
     late: !!sub.late,
     score: typeof sub.score === "number" ? sub.score : null,
@@ -238,11 +253,8 @@ export function priority(item, courseCfg, now) {
 
   if (item.done) return { score: -1, reasons: ["done"] };
 
-  const overdueDays = item.due ? -daysUntil(item.due, now) : 0;
-  if (overdueDays > STALE_DAYS) {
-    // months late — keep it findable, stop it shouting
-    return { score: -0.5, reasons: [`${overdueDays} days late — probably last year's`] };
-  }
+  const bucket = item.bucket || bucketOf(item, now);
+  if (QUIET_BUCKETS.includes(bucket)) return { score: -0.5, reasons: [] };
   if (item.missing || (item.due && hoursUntil(item.due, now) < 0 && item.kind !== "event")) {
     score += 1000; reasons.push("overdue");
   }
@@ -281,7 +293,7 @@ export function priority(item, courseCfg, now) {
   return { score: Math.round(score), reasons };
 }
 
-export function bucketOf(item, now) {
+export function bucketOf(item, now, settings = {}) {
   if (item.done) return "done";
   if (item.kind === "event" && item.due) {
     const end = item.endAt ? new Date(item.endAt) : new Date(item.due);
@@ -290,7 +302,11 @@ export function bucketOf(item, now) {
   }
   const d = daysUntil(item.allDay && item.allDayDate ? `${item.allDayDate}T12:00:00` : item.due, now);
   if (d === null) return "undated";
-  if (d < -STALE_DAYS) return "stale";
+  const reminderDays = archiveDays(settings.reminderArchiveDays, 0);
+  const assignmentDays = archiveDays(settings.assignmentArchiveDays, STALE_DAYS);
+  if (item.kind === "note" && !item.keepActive && reminderDays !== -1 && d < -reminderDays) return "pastReminders";
+  if (item.kind !== "note" && !item.keepActive && assignmentDays !== -1 && d < -assignmentDays) return "stale";
+  if (d < 0 && !item.keepActive && needsCompletionCheck(item)) return "review";
   if (d < 0) return "overdue";
   if (d === 0) return "today";
   if (d === 1) return "tomorrow";
@@ -298,10 +314,10 @@ export function bucketOf(item, now) {
   return "later";
 }
 
-export const BUCKET_ORDER = ["overdue", "today", "tomorrow", "week", "later", "undated", "past", "stale", "done"];
+export const BUCKET_ORDER = ["overdue", "today", "tomorrow", "week", "later", "undated", "review", "past", "pastReminders", "stale", "done"];
 export const BUCKET_LABEL = {
   overdue: "Overdue", today: "Today", tomorrow: "Tomorrow", week: "This week",
-  later: "Later", undated: "No due date", past: "Past events", stale: "From a while ago", done: "Done"
+  later: "Later", undated: "No due date", review: "Check status", past: "Past events", pastReminders: "Past reminders", stale: "Older assignments", done: "Done"
 };
 
 /* ------------------------------------------------------------------ merge */
@@ -323,6 +339,7 @@ export function buildStream(raw, cfgByCourse, opts) {
   const hidden = new Set((opts && opts.hiddenCourses) || []);
   const dismissed = new Set((opts && opts.dismissed) || []);
   const done = new Set((opts && opts.doneLocal) || []);
+  const kept = new Set((opts && opts.keptActive) || []);
 
   let items = dedupe(raw).filter(it => {
     if (it.courseId && hidden.has(String(it.courseId))) return false;
@@ -332,9 +349,15 @@ export function buildStream(raw, cfgByCourse, opts) {
 
   items = items.map(it => {
     const cfg = cfgByCourse[String(it.courseId)] || {};
-    const isDone = it.done || done.has(it.uid);
-    const p = priority({ ...it, done: isDone }, cfg, now);
-    return { ...it, done: isDone, priority: p.score, reasons: p.reasons, bucket: bucketOf({ ...it, done: isDone }, now) };
+    const isDone = !!(it.done || it.excused || done.has(it.uid));
+    const item = { ...it, done: isDone, canvasComplete: it.source === "canvas" && !!(it.done || it.excused), keepActive: kept.has(it.uid) };
+    item.bucket = bucketOf(item, now, opts?.settings);
+    // Canvas may flag a paper test or external-tool task as missing before
+    // its teacher records completion. Preserve that fact for the detail view.
+    item.canvasMissing = !!(it.canvasMissing ?? it.missing);
+    item.missing = !isDone && item.canvasMissing && !needsCompletionCheck(item);
+    const p = priority(item, cfg, now);
+    return { ...item, priority: p.score, reasons: p.reasons };
   });
 
   items.sort((a, b) => {
@@ -408,8 +431,8 @@ export function counts(items, now) {
   const c = { overdue: 0, today: 0, tomorrow: 0, week: 0, open: 0, stale: 0 };
   for (const it of items) {
     if (it.done) continue;
-    const b = bucketOf(it, now);
-    if (b === "past") continue;
+    const b = it.bucket || bucketOf(it, now);
+    if (["past", "pastReminders", "review"].includes(b)) continue;
     if (b === "stale") { c.stale++; continue; }   // archived work is not "open"
     c.open++;
     if (c[b] !== undefined) c[b]++;

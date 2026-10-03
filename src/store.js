@@ -8,6 +8,7 @@ const DEFAULTS = {
   localEvents: [],            // manual items that failed to write to Canvas, or repeating ones
   doneLocal: [],              // uids ticked off by hand (on-paper work Canvas never marks)
   dismissed: [],              // uids hidden for good
+  keptActive: [],             // dated items explicitly kept in the main list
   settings: {
     syncMinutes: 30,
     notifyHoursAhead: 24,
@@ -15,7 +16,9 @@ const DEFAULTS = {
     showActivities: false,   // clubs get their own tab; they used to flood the list
     weekStart: 0,
     density: "compact",
-    theme: "system"
+    theme: "system",
+    assignmentArchiveDays: 14,
+    reminderArchiveDays: 0
   },
   cache: null,                // last fullSync payload
   lastError: null
@@ -59,13 +62,19 @@ export async function dismiss(uid) {
   return [...set];
 }
 
+export async function keepActive(uid, active) {
+  const s = await getState(), ids = new Set(s.keptActive);
+  if (active) ids.add(uid); else ids.delete(uid);
+  await chrome.storage.local.set({ keptActive: [...ids] });
+}
+
 /* Keep local work separate and recoverable when moving between schools. */
 export async function switchSchool(host) {
   const target = normalizeHost(host), state = await getState();
   if (state.host === target) return setState({ host: target, lastError: null });
   const profiles = { ...(state.schoolProfiles || {}) };
-  if (state.host) profiles[state.host] = { courseCfg: state.courseCfg, localEvents: state.localEvents, doneLocal: state.doneLocal, dismissed: state.dismissed };
-  const profile = profiles[target] || { courseCfg: {}, localEvents: [], doneLocal: [], dismissed: [] };
+  if (state.host) profiles[state.host] = { courseCfg: state.courseCfg, localEvents: state.localEvents, doneLocal: state.doneLocal, dismissed: state.dismissed, keptActive: state.keptActive };
+  const profile = { courseCfg: {}, localEvents: [], doneLocal: [], dismissed: [], keptActive: [], ...(profiles[target] || {}) };
   return setState({ ...profile, schoolProfiles: profiles, host: target, cache: null, lastError: null, notified: [], syncProgress: null });
 }
 
@@ -98,7 +107,7 @@ export async function exportBackup() {
   return JSON.stringify({
     version: 1, exported: new Date().toISOString(),
     host: s.host, courseCfg: s.courseCfg, localEvents: s.localEvents,
-    doneLocal: s.doneLocal, dismissed: s.dismissed, settings: s.settings
+    doneLocal: s.doneLocal, dismissed: s.dismissed, keptActive: s.keptActive, settings: s.settings
   }, null, 2);
 }
 
@@ -112,8 +121,8 @@ export function validateBackup(json) {
   if (!d || d.version !== 1) throw new Error("Not a Coursedeck backup file");
   const record = x => x && typeof x === "object" && !Array.isArray(x);
   if (!record(d.courseCfg || {}) || !record(d.settings || {}) ||
-      ![d.localEvents || [], d.doneLocal || [], d.dismissed || []].every(Array.isArray)) throw new Error("Invalid backup structure");
-  if (![...(d.doneLocal || []), ...(d.dismissed || [])].every(x => typeof x === "string")) throw new Error("Invalid saved item IDs");
+      ![d.localEvents || [], d.doneLocal || [], d.dismissed || [], d.keptActive || []].every(Array.isArray)) throw new Error("Invalid backup structure");
+  if (![...(d.doneLocal || []), ...(d.dismissed || []), ...(d.keptActive || [])].every(x => typeof x === "string")) throw new Error("Invalid saved item IDs");
   for (const [id, cfg] of Object.entries(d.courseCfg || {})) {
     if (!/^\d+$/.test(id) || !record(cfg) || (cfg.color && !/^#[a-f\d]{6}$/i.test(cfg.color))) throw new Error("Invalid course settings");
   }
@@ -125,12 +134,14 @@ export function validateBackup(json) {
   const settings = { ...DEFAULTS.settings, ...(d.settings || {}) };
   if (![15, 30, 60, 180].includes(Number(settings.syncMinutes)) || ![6, 12, 24, 48].includes(Number(settings.notifyHoursAhead))) throw new Error("Invalid reminder settings");
   settings.theme = ["light", "dark"].includes(settings.theme) ? settings.theme : "system";
+  if (![7, 14, 30, 45, -1].includes(settings.assignmentArchiveDays) || ![0, 3, 7, 14, -1].includes(settings.reminderArchiveDays)) throw new Error("Invalid archive settings");
   return {
     host: d.host ? normalizeHost(d.host) : null,
     courseCfg: d.courseCfg || {},
     localEvents: d.localEvents || [],
     doneLocal: d.doneLocal || [],
     dismissed: d.dismissed || [],
+    keptActive: d.keptActive || [],
     settings
   };
 }
