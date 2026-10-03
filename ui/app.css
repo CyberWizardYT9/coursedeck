@@ -275,8 +275,8 @@ label.inline input{width:auto;padding:0}
 .settings-page .card{padding:23px 25px;margin-bottom:17px}
 .settings-page h3{font-size:16px;margin-bottom:8px}
 .back-link{display:inline-block;margin:-4px 0 24px;font-size:12px;text-decoration:none}
-.popup-page{width:390px;max-height:600px;overflow:auto;background:var(--bg)}
-.popup-wrap{padding:21px}
+.popup-page{width:390px;max-width:100%;max-height:600px;overflow:auto;background:var(--bg)}
+.popup-wrap{padding:21px 21px 115px}
 .popup-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:26px}
 .popup-header img{border-radius:9px}.popup-header b{font-size:16px;letter-spacing:-.4px}
 .popup-header .icon-btn{padding:8px;width:32px;height:32px}
@@ -291,7 +291,8 @@ label.inline input{width:auto;padding:0}
 .mini a{text-decoration:none;color:inherit;display:block}.mini a:hover .t{color:var(--accent)}
 .mini .t{font-size:12px;font-weight:600;line-height:1.5}.mini .m{font-size:10px;color:var(--mute);margin-top:5px}
 .mini-course{font-weight:600;margin-right:5px}.mini-course::before{content:'•';margin-right:4px}
-.popup-open{width:100%;display:flex;justify-content:space-between;margin-top:20px;font-size:12px!important}
+.popup-footer{position:fixed;bottom:0;left:0;width:390px;max-width:100%;background:var(--bg);padding:13px 21px 15px;border-top:1px solid var(--line);z-index:2}
+.popup-open{width:100%;display:flex;justify-content:space-between;font-size:12px!important}
 .popup-shortcut{font-size:9px;color:var(--mute);display:flex;justify-content:space-between;align-items:center;margin-bottom:0}
 .popup-shortcut kbd{padding:1px 4px;font-size:9px;border:1px solid var(--line);border-radius:4px}
 .popup-empty{padding:25px 5px;text-align:center;font-size:15px;font-weight:600}.popup-empty span{display:block;font-weight:400;font-size:12px;color:var(--mute);margin-top:6px}

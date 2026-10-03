@@ -15,6 +15,9 @@ function t(name, fn) {
 }
 
 const NOW = "2026-08-19T19:00:00-04:00";
+// These fixtures describe a New York school day, including 11:59 p.m. work.
+// A UTC CI runner must interpret the calendar day in the fixture's timezone.
+process.env.TZ = "America/New_York";
 const course = { id: 3528, name: "Cambr AICE Global Pers & Ind Res 1 AS - Mar", short: "Global Pers" };
 
 console.log("\nstate matching");
